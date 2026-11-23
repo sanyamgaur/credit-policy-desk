@@ -1,0 +1,28 @@
+{
+  "note": "Each case edits the template memo of one borrower (find -> replace) and says whether the memo checker must block it or allow it. Cases A-F came from the senior review; G and H are earlier bugs.",
+  "cases": [
+    {"name": "A. wrong figure from the same rule's inputs (14 is the interest rate)", "borrower": "B02",
+     "find": "DSCR is 1.07x", "replace": "DSCR is 14x", "expect": "blocked"},
+    {"name": "B. right figure, wrong meaning", "borrower": "B02",
+     "find": "DSCR is 1.07x, but the policy needs at least 1.25x", "replace": "DSCR is 1.07x, comfortably above the minimum of 1.25x", "expect": "blocked"},
+    {"name": "C. recommends approval while the file is outside policy", "borrower": "B02",
+     "find": "### Recommendation", "replace": "### Recommendation\nWe recommend approving the loan [POLICY].", "expect": "blocked"},
+    {"name": "D. correct amount in other units (1.5 crore = 150 lakh)", "borrower": "B01",
+     "find": "Rs 150 lakh", "replace": "Rs 1.5 crore", "expect": "allowed"},
+    {"name": "E. rounded so far it hides a fail", "borrower": "B02",
+     "find": "DSCR is 1.07x", "replace": "DSCR is 1x", "expect": "blocked"},
+    {"name": "F. minus sign added", "borrower": "B03",
+     "find": "is 21.3%", "replace": "is -21.3%", "expect": "blocked"},
+    {"name": "G. real figure borrowed from another rule (1.77 is the DSCR)", "borrower": "B01",
+     "find": "Current ratio is 1.43x", "replace": "Current ratio is 1.77x", "expect": "blocked"},
+    {"name": "H. wrong current ratio that equals another rule's rounded limit", "borrower": "B12",
+     "find": "Current ratio is 0.88x", "replace": "Current ratio is 1.30x", "expect": "blocked"},
+    {"name": "I. says a passing rule fails", "borrower": "B01",
+     "find": "DSCR is 1.77x, comfortably within the limit of at least 1.25x", "replace": "DSCR is 1.77x, which fails the minimum of at least 1.25x", "expect": "blocked"},
+    {"name": "J. misspelled placeholder left unfilled", "borrower": "B02",
+     "find": "DSCR is 1.07x", "replace": "DSCR is {R4.valu}", "expect": "blocked"},
+    {"name": "K. AI-style draft with placeholders, filled by code", "borrower": "B02",
+     "draft": "### Summary\nThe borrower asks for {APP.amount} over {APP.tenure} at {APP.rate} [APP].\n### Concerns\nDSCR is {R4.value}, below the minimum of {R4.limit} [R4].\n### Recommendation\n{OUTCOME} [POLICY].",
+     "expect": "allowed"}
+  ]
+}

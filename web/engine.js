@@ -205,17 +205,45 @@
   // ---------------- Memo ----------------
   const TAG_SRC = String.raw`\[(?:R\d+|APP|POLICY)(?:\s*,\s*(?:R\d+|APP|POLICY))*\]`;
   const tagRe = (flags = "") => new RegExp(TAG_SRC, flags);
-  const numRe = () => /(?<![A-Za-z\d.])\d[\d,]*(?:\.\d+)?/g;
+  // A number, with an optional minus sign and an optional unit word after it.
+  const numRe = () => /(?<![A-Za-z\d.\-−])([-−]?)(\d[\d,]*(?:\.\d+)?)(\s*(?:crore|cr\b|lakhs?))?/gi;
+
+  // Words that claim a rule passed, or failed. Checked against the rule's real result.
+  const POSITIVE = /\b(pass(es|ed)?|comfortabl[ey]|within (the )?(limit|policy|threshold)|meets?|satisf(y|ies|ied)|healthy|above (the )?(required |policy )?minimum|under (the )?(cap|maximum))\b/i;
+  const NEGATIVE = /\b(fail(s|ed)?|breach(es|ed)?|below (the )?(required |policy )?minimum|above (the )?(maximum|cap|limit)|exceed(s|ed)?|short of|violat(es|ed|ion))\b/i;
+  const APPROVE = /\b(recommend(s|ed)? (approv\w*|sanction\w*)|approve the loan|should be approved|can be approved|sanction the loan)\b/i;
+  const DECLINE = /\b(declin\w*|reject\w*)\b/i;
+
+  /* Placeholders the AI writes instead of numbers. Code fills them in, so the AI
+   * never types a figure itself. */
+  function memoSlots(ev) {
+    const lr = ev.borrower.loan_request;
+    const slots = {
+      "APP.amount": `Rs ${lr.amount_lakh} lakh`, "APP.tenure": `${lr.tenure_months} months`,
+      "APP.rate": `${lr.annual_rate_pct}%`, OUTCOME: ev.recommendation.label,
+    };
+    for (const r of ev.results) {
+      slots[`${r.id}.value`] = r.value_display;
+      slots[`${r.id}.limit`] = r.threshold_display;
+      if (r.reason) slots[`${r.id}.reason`] = r.reason;
+    }
+    return slots;
+  }
+
+  function fillPlaceholders(draft, ev) {
+    const slots = memoSlots(ev);
+    return draft.replace(/\{([A-Z0-9]+\.[a-z]+|OUTCOME)\}/g, (m, key) => (key in slots ? slots[key] : m));
+  }
 
   function memoFacts(ev) {
-    const b = ev.borrower, lr = b.loan_request;
+    const b = ev.borrower;
     return {
       borrower: b.name, industry: b.industry,
-      "loan_request [APP]": `Rs ${lr.amount_lakh} lakh over ${lr.tenure_months} months at ${lr.annual_rate_pct}%`,
-      "recommendation [POLICY]": ev.recommendation.label,
-      recommendation_meaning: ev.recommendation.explain,
-      rules: ev.results.map((r) => ({ tag: r.id, rule: r.short, result: r.status, value: r.value_display,
-        limit: r.threshold_display, why_not_checked: r.reason })),
+      loan_request_tag_APP: "{APP.amount} over {APP.tenure} at {APP.rate}",
+      outcome_tag_POLICY: "{OUTCOME}",
+      outcome_meaning: ev.recommendation.explain,
+      rules: ev.results.map((r) => ({ tag: r.id, rule: r.short, result: r.status,
+        value: `{${r.id}.value}`, limit: `{${r.id}.limit}`, why_not_checked: r.reason ? `{${r.id}.reason}` : null })),
     };
   }
 
@@ -243,13 +271,15 @@
   const MEMO_PROMPT = `You are drafting a short credit memo for a human credit reviewer at a lender.
 
 Rules you must follow:
-1. Use ONLY the facts in the JSON below. Do not add, round differently, or invent any number.
-2. Do not change the recommendation. State it exactly as given.
-3. End every sentence with the tags of the facts it relies on, placed before the full stop,
-   like "... below the minimum [R4]." Use [APP] for loan application details and [POLICY]
-   for the overall recommendation.
-4. Plain English that a new analyst can follow. 120 to 200 words.
-5. Use exactly these headings, each on its own line starting with "### ":
+1. NEVER type a digit. Wherever a number belongs, copy the placeholder from the facts exactly,
+   for example {R4.value} or {APP.amount}. Code replaces placeholders with the real figures.
+2. Do not change the outcome. State it with the {OUTCOME} placeholder.
+3. Describe each rule's result truthfully: a FAIL rule does not meet the policy, a PASS rule does.
+4. End every sentence with the tags of the facts it relies on, placed before the full stop,
+   like "... does not meet the policy [R4]." Use [APP] for loan application details and
+   [POLICY] for the overall outcome.
+5. Plain English that a new analyst can follow. 120 to 200 words.
+6. Use exactly these headings, each on its own line starting with "### ":
    Summary, Concerns, Missing information, Strengths, Recommendation.
    If a section has nothing, write "None [POLICY]."
 
@@ -258,51 +288,78 @@ FACTS:
 
   function memoPrompt(ev) { return MEMO_PROMPT + JSON.stringify(memoFacts(ev), null, 2); }
 
-  /* The numbers each citation tag is allowed to back up. A sentence tagged [R6]
-   * may only use R6's numbers, so a number that exists elsewhere in the file
-   * (say, the DSCR limit) can't sneak into a sentence about the current ratio. */
+  function parseNumbers(text) {
+    const out = [];
+    for (const m of String(text || "").matchAll(numRe())) {
+      let n = parseFloat(m[2].replace(/,/g, ""));
+      if (m[1]) n = -n;
+      if (m[3] && /cr/i.test(m[3])) n *= 100;   // crore -> lakh
+      out.push({ raw: m[0].trim(), n });
+    }
+    return out;
+  }
+
+  /* The exact figures each citation tag may use, read from the same display text
+   * the reviewer sees (so "1.07x" allows 1.07, not 1 or 1.1). A sentence tagged
+   * [R6] may only use R6's own figures. Loan-application inputs belong to [APP]. */
   function numbersByTag(ev, policy) {
     const tags = {};
-    const adder = (vals) => (v) => {
-      if (typeof v !== "number") return;
-      for (const d of [0, 1, 2]) { vals.push(round(v, d)); vals.push(Number(v.toFixed(d))); }
-    };
-    const fromText = (add, text) => { for (const n of String(text || "").match(numRe()) || []) add(parseFloat(n.replace(/,/g, ""))); };
+    const add = (list, text) => parseNumbers(text).forEach((p) => list.push(p.n));
     for (const r of ev.results) {
-      const vals = (tags[r.id] = []), add = adder(vals);
-      add(r.value); add(r.threshold); fromText(add, r.reason);
-      r.inputs.forEach((i) => add(i.value));
+      const list = (tags[r.id] = []);
+      add(list, r.value_display); add(list, r.threshold_display); add(list, r.reason);
+      r.inputs.filter((i) => i.source !== DOC_TITLES.application && typeof i.value === "number")
+        .forEach((i) => add(list, fmt(i.value, i.unit)));
       const rule = policy.rules.find((p) => p.id === r.id);
-      if (rule) fromText(add, rule.text);
+      if (rule) add(list, rule.text);
     }
-    tags.APP = []; Object.values(ev.borrower.loan_request).forEach(adder(tags.APP));
-    tags.POLICY = []; const addP = adder(tags.POLICY);
-    addP(ev.results.length);
-    for (const s of ["FAIL", "CANT_CHECK", "BORDERLINE", "PASS"]) addP(ev.results.filter((r) => r.status === s).length);
+    const lr = ev.borrower.loan_request;
+    tags.APP = [lr.amount_lakh, lr.tenure_months, lr.annual_rate_pct];
+    tags.POLICY = [ev.results.length].concat(["FAIL", "CANT_CHECK", "BORDERLINE", "PASS"]
+      .map((s) => ev.results.filter((r) => r.status === s).length));
     return tags;
   }
 
   function checkMemo(memo, ev, policy) {
     const byTag = numbersByTag(ev, policy);
     const everything = [].concat(...Object.values(byTag));
-    const numbers = [], uncited = [];
+    const status = Object.fromEntries(ev.results.map((r) => [r.id, r.status]));
+    const code = ev.recommendation.code;
+    const numbers = [], uncited = [], contradictions = [], decisionConflicts = [];
+    const placeholders = (memo.match(/\{[^}\n]*\}/g) || []);
     const body = memo.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
     for (const line of body) {
       for (const sentence of line.trim().split(/(?<=[.!?])\s+/)) {
         if (!sentence) continue;
         const cited = (sentence.match(tagRe("g")) || []).flatMap((t) => t.slice(1, -1).split(/\s*,\s*/));
         if (!cited.length) uncited.push(sentence);
-        const allowed = cited.length ? [].concat(...cited.map((t) => byTag[t] || [])) : everything;
         const plain = sentence.replace(tagRe("g"), "");
-        for (const raw of plain.match(numRe()) || []) {
-          const n = parseFloat(raw.replace(/,/g, "").replace(/\.$/, ""));
-          numbers.push({ number: raw, ok: allowed.some((a) => Math.abs(n - a) < 1e-6), sentence });
+        // 1. Every figure must be one of the cited rules' exact figures.
+        const allowed = cited.length ? [].concat(...cited.map((t) => byTag[t] || [])) : everything;
+        for (const p of parseNumbers(plain))
+          numbers.push({ number: p.raw, ok: allowed.some((a) => Math.abs(p.n - a) < 1e-9), sentence });
+        // 2. Words must not contradict the cited rule's real result.
+        const rules = cited.filter((t) => t in status);
+        const results = new Set(rules.map((t) => status[t]));
+        if (rules.length && results.size === 1) {
+          const s = [...results][0];
+          if ((s === "FAIL" || s === "CANT_CHECK") && POSITIVE.test(plain))
+            contradictions.push({ sentence, why: `says it passes, but ${rules.join(", ")} ${s === "FAIL" ? "fails" : "could not be checked"}` });
+          if (s !== "FAIL" && NEGATIVE.test(plain))
+            contradictions.push({ sentence, why: `says it fails, but ${rules.join(", ")} ${s === "CANT_CHECK" ? "could not be checked" : "passes"}` });
         }
+        // 3. The memo must not recommend a different decision from the rule engine.
+        const approves = APPROVE.test(plain) && !/deviation/i.test(plain);
+        if (approves && (code === "OUTSIDE_POLICY" || code === "INCOMPLETE"))
+          decisionConflicts.push({ sentence, why: "recommends approval, but the file is " + ev.recommendation.label.toLowerCase() });
+        if (DECLINE.test(plain) && (code === "WITHIN_POLICY" || code === "WITHIN_POLICY_REVIEW"))
+          decisionConflicts.push({ sentence, why: "recommends declining, but the file is within policy" });
       }
     }
-    const recommendationOk = memo.toLowerCase().includes(ev.recommendation.label.toLowerCase());
+    const recommendationOk = memo.toLowerCase().includes(ev.recommendation.label.toLowerCase()) && !decisionConflicts.length;
     const unmatched = numbers.filter((n) => !n.ok);
-    return { numbers, unmatched, uncited, recommendationOk, passed: !unmatched.length && !uncited.length && recommendationOk };
+    return { numbers, unmatched, uncited, contradictions, decisionConflicts, placeholders, recommendationOk,
+      passed: !unmatched.length && !uncited.length && !contradictions.length && recommendationOk && !placeholders.length };
   }
 
   function injectError(memo) {
@@ -320,7 +377,7 @@ FACTS:
     return { memo, old: null, wrong: null };
   }
 
-  const api = { STATUS_ORDER, STATUS_LABEL, evaluate, reviewQueue, fmt, templateMemo, memoPrompt,
+  const api = { STATUS_ORDER, STATUS_LABEL, evaluate, reviewQueue, fmt, templateMemo, memoPrompt, memoSlots, fillPlaceholders,
     checkMemo, injectError, yearlyRepayment };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.CAM = api;

@@ -91,12 +91,33 @@ Push to a public GitHub repo, then create an app on Streamlit Community Cloud po
 `app.py`. Without a key, the hosted app runs in template mode, and every check still works.
 Only add `GEMINI_API_KEY` as a secret if you're fine with visitors using your free quota.
 
-## A bug the testing caught
+## Trying to break my own checker
 
 The first memo checker only asked whether each number existed *somewhere* in the borrower's
-facts. A planted wrong current ratio (0.88 changed to 1.30) slipped through, because 1.30 is the
-DSCR limit (1.25) rounded. Now each sentence may only use numbers from the rules it cites: a
-sentence tagged `[R6]` can only use current-ratio numbers.
+facts. Testing found it could be fooled in several ways: a wrong figure that happened to match
+another rule's limit, a figure rounded so far it hid a failure ("DSCR is 1x"), a dropped minus
+sign, the right number with the wrong meaning ("1.07x, comfortably above the minimum"), and a
+memo recommending approval for a loan outside policy.
+
+The fix has two parts:
+
+1. **The AI never types a number.** It writes placeholders like `{R4.value}`, and code fills in
+   the exact figure. Number errors become impossible rather than merely detected.
+2. **Code checks what's left:** each figure must be an exact figure of the rule its sentence
+   cites; words like "passes" or "fails" must match that rule's real result; the memo may not
+   recommend a different decision from the rule engine; amounts in crore are converted to lakh.
+
+`tests/attack_cases.json` keeps every attack as a permanent test. Run everything with:
+
+```bash
+python3 tests/run_tests.py
+```
+
+It checks the attack memos in Python and JavaScript, that both engines agree on 24 evaluations,
+and the 120 hand-written rule answers.
+
+**Known limits:** the meaning check uses word lists, so unusual phrasing can slip past it. A
+production version would need a stronger approach, such as formal rule checking.
 
 ## What I'd do next
 

@@ -119,8 +119,11 @@ with tab1:
                 note = d2.text_input("Reason (needed for any override)", key=f"txt-{key}",
                                      value=prev.get("reason", ""))
                 if choice.startswith("Override") and not note.strip():
-                    st.error("An override needs a written reason. It goes into the audit log.")
-                st.session_state.decisions[key] = {"decision": choice, "reason": note}
+                    # An override is only recorded once it has a written reason.
+                    st.error("An override needs a written reason. Nothing is recorded until you add one.")
+                    st.session_state.decisions.pop(key, None)
+                else:
+                    st.session_state.decisions[key] = {"decision": choice, "reason": note.strip()}
 
     for r in flagged:
         show_rule(r, open_=True)
@@ -184,9 +187,17 @@ with tab2:
                      f"{'every sentence cites a rule' if not check['uncited'] else str(len(check['uncited'])) + ' sentence(s) cite nothing'}")
             for s in check["uncited"]:
                 st.warning(s)
+            st.write(f"{'✅' if not check['contradictions'] else '❌'} **Meaning:** "
+                     f"{'no sentence contradicts a rule result' if not check['contradictions'] else str(len(check['contradictions'])) + ' sentence(s) contradict a rule result'}")
+            for x in check["contradictions"]:
+                st.error(f"{x['why']}. Sentence: _{x['sentence']}_")
             st.write(f"{'✅' if check['recommendation_ok'] else '❌'} **Recommendation** "
                      f"{'matches' if check['recommendation_ok'] else 'does not match'} the rule engine "
                      f"(\"{rec['label']}\")")
+            for x in check["decision_conflicts"]:
+                st.error(f"{x['why']}. Sentence: _{x['sentence']}_")
+            if check["placeholders"]:
+                st.error(f"Unfilled placeholders: {', '.join(check['placeholders'])}")
             if check["passed"]:
                 st.success("Memo passed all checks. It can go to the reviewer.")
             else:

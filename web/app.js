@@ -178,7 +178,7 @@
     const decide = r.status === "PASS" ? "" : `<div class="decide" data-key="${key}">
       <div><label>Reviewer decision</label><select>${DECISIONS.map((x) => `<option ${x === d.decision ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
       <div><label>Reason (needed for any override)</label><input type="text" value="${esc(d.reason)}" placeholder="e.g. Promoter brought in Rs 40 lakh fresh equity"></div>
-      <div class="err" hidden style="grid-column:1/-1">An override needs a written reason. It goes into the audit log.</div></div>`;
+      <div class="err" hidden style="grid-column:1/-1">An override needs a written reason. Nothing is recorded until you add one.</div></div>`;
     return `<details class="rule" ${open ? "open" : ""}><summary><span class="cell s-${r.status}">${ICON[r.status]}</span>
       <span class="title">${r.id} · ${esc(r.short)}</span><span class="badge s-${r.status}">${esc(CAM.STATUS_LABEL[r.status])}</span>
       <span class="val">${esc(r.value_display)} · policy: ${esc(r.threshold_display)}</span></summary>
@@ -189,8 +189,11 @@
   function wireDecision(box) {
     const key = box.dataset.key, sel = box.querySelector("select"), txt = box.querySelector("input"), err = box.querySelector(".err");
     const update = () => {
-      decisions[key] = { decision: sel.value, reason: txt.value };
-      err.hidden = !(sel.value.startsWith("Override") && !txt.value.trim());
+      const missingReason = sel.value.startsWith("Override") && !txt.value.trim();
+      err.hidden = !missingReason;
+      // An override is only recorded once it has a written reason.
+      if (missingReason) delete decisions[key];
+      else decisions[key] = { decision: sel.value, reason: txt.value.trim(), at: new Date().toISOString() };
       renderAudit();
     };
     sel.addEventListener("change", update);
@@ -204,14 +207,15 @@
   }
   function renderAudit() {
     const rows = auditRows();
-    $("audit").innerHTML = rows.length ? `<div class="table-wrap"><table><thead><tr><th>File</th><th>Rule</th><th>Decision</th><th>Reason</th></tr></thead><tbody>${
-      rows.map((r) => `<tr><td>${r.file}</td><td>${r.rule}</td><td>${esc(r.decision)}</td><td>${r.reason ? esc(r.reason) : (r.decision.startsWith("Override") ? '<span style="color:var(--fail)">missing</span>' : "")}</td></tr>`).join("")}</tbody></table></div>
+    $("audit").innerHTML = rows.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th>File</th><th>Rule</th><th>Decision</th><th>Reason</th></tr></thead><tbody>${
+      rows.map((r) => `<tr><td>${esc(new Date(r.at).toLocaleTimeString())}</td><td>${esc(r.file)}</td><td>${esc(r.rule)}</td><td>${esc(r.decision)}</td><td>${esc(r.reason)}</td></tr>`).join("")}</tbody></table></div>
       <div class="btns"><button class="btn" id="dl-audit">Download audit log (CSV)</button></div>`
       : `<p class="muted" style="margin:0">No decisions recorded yet. Every decision and its reason lands here.</p>`;
     const dl = $("dl-audit");
     if (dl) dl.addEventListener("click", () => {
-      const q = (s) => `"${String(s).replace(/"/g, '""')}"`;
-      const csv = ["File,Rule,Decision,Reason", ...rows.map((r) => [r.file, r.rule, r.decision, r.reason].map(q).join(","))].join("\n");
+      // Quote every cell, and stop spreadsheet apps running text that starts like a formula.
+      const q = (s) => { let t = String(s ?? ""); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
+      const csv = ["Time,File,Rule,Decision,Reason", ...rows.map((r) => [r.at, r.file, r.rule, r.decision, r.reason].map(q).join(","))].join("\n");
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: "audit_log.csv" });
       a.click();
     });
@@ -287,7 +291,11 @@
         ${c.unmatched.map((n) => `<div class="err"><b>${esc(n.number)}</b> is not in the facts.<br><small>${esc(n.sentence)}</small></div>`).join("")}</div></div>
       <div class="check-line"><span class="ic">${c.uncited.length ? "❌" : "✅"}</span><div><b>Sources:</b> ${c.uncited.length ? `${c.uncited.length} sentence(s) cite no rule` : "every sentence cites a rule"}
         ${c.uncited.map((s) => `<div class="warn">${esc(s)}</div>`).join("")}</div></div>
-      <div class="check-line"><span class="ic">${c.recommendationOk ? "✅" : "❌"}</span><div><b>Outcome</b> ${c.recommendationOk ? "matches" : "does not match"} the rule engine ("${esc(ev.recommendation.label)}")</div></div>
+      <div class="check-line"><span class="ic">${c.contradictions.length ? "❌" : "✅"}</span><div><b>Meaning:</b> ${c.contradictions.length ? `${c.contradictions.length} sentence(s) contradict a rule's result` : "no sentence contradicts a rule's result"}
+        ${c.contradictions.map((x) => `<div class="err">${esc(x.why)}.<br><small>${esc(x.sentence)}</small></div>`).join("")}</div></div>
+      <div class="check-line"><span class="ic">${c.recommendationOk ? "✅" : "❌"}</span><div><b>Outcome</b> ${c.recommendationOk ? "matches" : "does not match"} the rule engine ("${esc(ev.recommendation.label)}")
+        ${c.decisionConflicts.map((x) => `<div class="err">${esc(x.why)}.<br><small>${esc(x.sentence)}</small></div>`).join("")}</div></div>
+      ${c.placeholders.length ? `<div class="check-line"><span class="ic">❌</span><div><b>Unfilled placeholders:</b> ${esc(c.placeholders.join(", "))}</div></div>` : ""}
       ${c.passed ? `<div class="ok">Memo passed every check. It can go to the reviewer.</div>` : `<div class="err">Memo blocked. Fix the flagged items before it reaches the reviewer.</div>`}`;
   }
 
@@ -324,12 +332,13 @@
       messages: [{ role: "user", content: CAM.memoPrompt(ev) }],
       temperature: 0.2, max_tokens: 600, stream: true,
     });
-    let text = "";
+    // The model writes placeholders like {R4.value}; code fills in every figure.
+    let draft = "";
     for await (const chunk of stream) {
-      text += (chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content) || "";
-      if (onToken) onToken(text);
+      draft += (chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content) || "";
+      if (onToken) onToken(CAM.fillPlaceholders(draft, ev));
     }
-    return text.trim();
+    return CAM.fillPlaceholders(draft.trim(), ev);
   }
 
   async function writeAiMemo(id) {
@@ -393,17 +402,19 @@
     const nums = results.reduce((s, r) => s + r.c.numbers.length, 0);
     const bad = results.reduce((s, r) => s + r.c.unmatched.length, 0);
     const unc = results.reduce((s, r) => s + r.c.uncited.length, 0);
-    const recBad = results.filter((r) => !r.c.recommendationOk).length;
+    const recBad = results.filter((r) => !r.c.recommendationOk || r.c.contradictions.length).length;
     $("ai-test").innerHTML = `<div class="chips" style="grid-template-columns:repeat(3,1fr)">
       <div class="chip"><div class="n">${passed}/${results.length}</div><div class="l">memos passed every check</div></div>
       <div class="chip"><div class="n">${bad}</div><div class="l">wrong numbers blocked (of ${nums})</div></div>
       <div class="chip"><div class="n">${unc}</div><div class="l">sentences with no source</div></div></div>
-      ${recBad ? `<p class="err">${recBad} memo(s) changed the outcome and were blocked.</p>` : ""}
+      ${recBad ? `<p class="err">${recBad} memo(s) misstated a rule result or the outcome, and were blocked.</p>` : ""}
       <div class="table-wrap"><table><thead><tr><th>File</th><th>Result</th><th>What the checks caught</th></tr></thead><tbody>${
         results.map((r) => {
           const issues = [];
           if (r.c.unmatched.length) issues.push(`wrong numbers: ${r.c.unmatched.map((n) => n.number).join(", ")}`);
           if (r.c.uncited.length) issues.push(`${r.c.uncited.length} uncited sentence(s)`);
+          if (r.c.contradictions.length) issues.push(`${r.c.contradictions.length} sentence(s) contradict a rule`);
+          if (r.c.placeholders.length) issues.push(`unfilled ${r.c.placeholders.join(", ")}`);
           if (!r.c.recommendationOk) issues.push("outcome changed");
           return `<tr><td>${r.id}</td><td>${r.c.passed ? '<span class="badge s-PASS">Passed</span>' : '<span class="badge s-FAIL">Blocked</span>'}</td><td>${esc(issues.join(" · ") || "-")}</td></tr>`;
         }).join("")}</tbody></table></div>`;

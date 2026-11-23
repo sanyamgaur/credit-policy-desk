@@ -131,8 +131,9 @@
         </div>
         <div class="card">
           <h3>AI memo test (runs on this device)</h3>
-          <p style="margin-top:0">The on-device model writes a memo for all 12 files. Code checks each one. A memo with a wrong number,
-            a sentence with no source, or a changed outcome is blocked.</p>
+          <p style="margin-top:0">The on-device model writes a memo for all 12 files. It never types a number: it writes placeholders,
+            and code fills in the real figures. Code then checks each memo. A wrong figure, a sentence that contradicts a rule's
+            result, a sentence with no source, or a changed outcome is blocked.</p>
           <div class="row"><button class="btn primary" id="run-ai-test">Run AI test on 12 files</button>
             <span class="muted" id="ai-test-status" style="font-size:13px"></span></div>
           <div id="ai-test" style="margin-top:10px"></div>

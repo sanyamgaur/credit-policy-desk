@@ -102,6 +102,8 @@ def part3_memos(policy):
         uncited += len(c["uncited"])
         issues = ([f"unmatched {', '.join(n['number'] for n in c['unmatched'])}"] if c["unmatched"] else []) \
             + ([f"{len(c['uncited'])} uncited sentence(s)"] if c["uncited"] else []) \
+            + ([f"{len(c['contradictions'])} sentence(s) contradict a rule"] if c["contradictions"] else []) \
+            + ([f"unfilled {', '.join(c['placeholders'])}"] if c["placeholders"] else []) \
             + ([] if c["recommendation_ok"] else ["recommendation changed"])
         rows.append(f"| {ev['borrower']['id']} | {'Pass' if c['passed'] else 'Flagged'} | "
                     f"{'; '.join(issues) or '-'} |")
