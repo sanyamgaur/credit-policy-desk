@@ -1,0 +1,7 @@
+__pycache__/
+.venv/
+venv/
+.streamlit/
+.env
+ai_test_log.txt
+.DS_Store

@@ -1,0 +1,81 @@
+{
+  "id": "B05",
+  "name": "Borrower E",
+  "industry": "Pharma packaging",
+  "synthetic": true,
+  "planted_problem": "Bank statements not submitted.",
+  "application_date": "2026-11-10",
+  "loan_request": {
+    "amount_lakh": 150,
+    "tenure_months": 60,
+    "annual_rate_pct": 14
+  },
+  "documents": {
+    "kyc": {
+      "present": true,
+      "incorporation_date": "2016-05-12",
+      "pages": {
+        "incorporation_date": 1
+      }
+    },
+    "bureau": {
+      "present": true,
+      "promoter_score": 742,
+      "max_dpd_12m": 0,
+      "pages": {
+        "promoter_score": 1,
+        "max_dpd_12m": 3
+      }
+    },
+    "financials_fy26": {
+      "present": true,
+      "revenue": 1200,
+      "ebitda": 180,
+      "existing_annual_debt_service": 60,
+      "existing_debt": 250,
+      "current_assets": 400,
+      "current_liabilities": 280,
+      "pages": {
+        "revenue": 4,
+        "ebitda": 5,
+        "existing_annual_debt_service": 18,
+        "existing_debt": 11,
+        "current_assets": 3,
+        "current_liabilities": 3
+      }
+    },
+    "financials_fy25": {
+      "present": true,
+      "revenue": 1080,
+      "ebitda": 160,
+      "pages": {
+        "revenue": 4,
+        "ebitda": 5
+      }
+    },
+    "gst_fy26": {
+      "present": true,
+      "months_filed": 12,
+      "turnover": 1180,
+      "pages": {
+        "turnover": 1,
+        "months_filed": 1
+      }
+    },
+    "bank_fy26": {
+      "present": false
+    }
+  },
+  "expected": {
+    "R1": "PASS",
+    "R2": "PASS",
+    "R3": "PASS",
+    "R4": "PASS",
+    "R5": "PASS",
+    "R6": "PASS",
+    "R7": "PASS",
+    "R8": "CANT_CHECK",
+    "R9": "CANT_CHECK",
+    "R10": "FAIL"
+  }
+}

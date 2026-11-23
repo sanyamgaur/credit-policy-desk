@@ -1,0 +1,97 @@
+{
+  "name": "Sample NBFC policy for small-business term loans (made up for this demo)",
+  "note": "Every rule and number here is invented for a demo. It is not any real lender's policy.",
+  "borderline_margin_pct": 5,
+  "rules": [
+    {
+      "id": "R1",
+      "short": "Business age",
+      "text": "The business must have been operating for at least 3 years.",
+      "metric": "vintage_years",
+      "op": ">=",
+      "threshold": 3,
+      "unit": "years"
+    },
+    {
+      "id": "R2",
+      "short": "Promoter bureau score",
+      "text": "The promoter's credit bureau score must be at least 700.",
+      "metric": "bureau_score",
+      "op": ">=",
+      "threshold": 700,
+      "unit": ""
+    },
+    {
+      "id": "R3",
+      "short": "Worst repayment delay",
+      "text": "No loan repayment may have been more than 30 days late in the last 12 months.",
+      "metric": "max_dpd_12m",
+      "op": "<=",
+      "threshold": 30,
+      "unit": "days"
+    },
+    {
+      "id": "R4",
+      "short": "DSCR",
+      "text": "DSCR (yearly cash profit divided by yearly loan repayments, including the new loan) must be at least 1.25.",
+      "metric": "dscr",
+      "op": ">=",
+      "threshold": 1.25,
+      "unit": "x"
+    },
+    {
+      "id": "R5",
+      "short": "Debt to EBITDA",
+      "text": "Total debt, including the new loan, must not exceed 3.5 times yearly cash profit (EBITDA).",
+      "metric": "debt_to_ebitda",
+      "op": "<=",
+      "threshold": 3.5,
+      "unit": "x"
+    },
+    {
+      "id": "R6",
+      "short": "Current ratio",
+      "text": "Current ratio (short-term assets divided by short-term liabilities) must be at least 1.2.",
+      "metric": "current_ratio",
+      "op": ">=",
+      "threshold": 1.2,
+      "unit": "x"
+    },
+    {
+      "id": "R7",
+      "short": "GST sales vs audited revenue",
+      "text": "Sales reported in GST returns must be within 10% of revenue in the audited financials.",
+      "metric": "gst_vs_revenue_gap_pct",
+      "op": "<=",
+      "threshold": 10,
+      "unit": "%"
+    },
+    {
+      "id": "R8",
+      "short": "Bank receipts vs GST sales",
+      "text": "Money received in the bank must be at least 80% of GST-reported sales.",
+      "metric": "bank_to_gst_pct",
+      "op": ">=",
+      "threshold": 80,
+      "unit": "%"
+    },
+    {
+      "id": "R9",
+      "short": "Bounced payments",
+      "text": "No more than 1 bounced cheque or EMI in the last 6 months.",
+      "metric": "bounces_6m",
+      "op": "<=",
+      "threshold": 1,
+      "unit": ""
+    },
+    {
+      "id": "R10",
+      "short": "Required documents",
+      "text": "All required documents must be present: KYC, bureau report, audited financials for 2 years, 12 months of GST returns and 12 months of bank statements.",
+      "metric": "documents_complete",
+      "op": "==",
+      "threshold": true,
+      "unit": ""
+    }
+  ]
+}

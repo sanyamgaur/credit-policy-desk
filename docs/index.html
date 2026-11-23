@@ -1,0 +1,1098 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Credit Policy Desk</title>
+<meta name="description" content="Checks loan files against a lender's own credit policy. Code decides, AI writes, code checks. Runs entirely in your browser.">
+<style>
+:root {
+  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f1f3f6; --border: #e2e5ea;
+  --text: #16191f; --muted: #5d6573; --accent: #2457d6; --accent-soft: #e8eefc;
+  --fail: #c62f2f; --fail-soft: #fdecec; --cant: #c26a00; --cant-soft: #fff3e3;
+  --border-s: #9a7b00; --border-soft: #fff8d6; --pass: #1f8a4c; --pass-soft: #e7f6ee;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
+  --radius: 10px;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1115; --surface: #171a21; --surface-2: #1e222b; --border: #2a2f3a;
+    --text: #e8eaef; --muted: #9aa3b2; --accent: #7aa2ff; --accent-soft: #1d2740;
+    --fail: #ff7b7b; --fail-soft: #3a1c1f; --cant: #ffb454; --cant-soft: #3a2a14;
+    --border-s: #f0d264; --border-soft: #353014; --pass: #5fd394; --pass-soft: #143021;
+    --shadow: none; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1115; --surface: #171a21; --surface-2: #1e222b; --border: #2a2f3a;
+  --text: #e8eaef; --muted: #9aa3b2; --accent: #7aa2ff; --accent-soft: #1d2740;
+  --fail: #ff7b7b; --fail-soft: #3a1c1f; --cant: #ffb454; --cant-soft: #3a2a14;
+  --border-s: #f0d264; --border-soft: #353014; --pass: #5fd394; --pass-soft: #143021;
+  --shadow: none; color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+}
+a { color: var(--accent); }
+h1, h2, h3, h4 { line-height: 1.25; margin: 0; }
+small, .muted { color: var(--muted); }
+code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em;
+  background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+
+.wrap { max-width: 1240px; margin: 0 auto; padding: 0 16px; }
+
+/* Header */
+header.top { background: var(--surface); border-bottom: 1px solid var(--border); }
+.top-inner { display: flex; align-items: center; gap: 16px; padding: 14px 0; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 17px; }
+.mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #fff;
+  display: grid; place-items: center; font-size: 15px; }
+.pills { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+.pill { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2);
+  color: var(--muted); border: 1px solid var(--border); white-space: nowrap; }
+.pill.good { background: var(--pass-soft); color: var(--pass); border-color: transparent; }
+
+.hero { padding: 26px 0 8px; }
+.hero h1 { font-size: 26px; letter-spacing: -.01em; }
+.hero p { color: var(--muted); max-width: 760px; margin: 8px 0 0; }
+.flow { display: flex; gap: 8px; align-items: stretch; margin-top: 16px; flex-wrap: wrap; }
+.flow .step { flex: 1 1 180px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 10px 12px; box-shadow: var(--shadow); }
+.flow .step b { display: block; font-size: 13px; }
+.flow .step span { font-size: 13px; color: var(--muted); }
+.flow .arrow { align-self: center; color: var(--muted); }
+@media (max-width: 700px) { .flow .arrow { display: none; } }
+
+/* Tabs */
+nav.tabs { display: flex; gap: 4px; margin: 22px 0 16px; border-bottom: 1px solid var(--border);
+  overflow-x: auto; }
+nav.tabs button { background: none; border: 0; padding: 10px 14px; font: inherit; color: var(--muted);
+  cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
+nav.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+section.panel { display: none; padding-bottom: 48px; }
+section.panel.active { display: block; }
+
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow); padding: 16px; }
+.card + .card { margin-top: 14px; }
+.card h3 { font-size: 15px; margin-bottom: 10px; }
+
+.grid-2 { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
+.grid-memo { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; align-items: start; }
+@media (max-width: 900px) { .grid-2, .grid-memo { grid-template-columns: 1fr; } }
+
+/* Policy panel */
+.rule-row { display: grid; grid-template-columns: 1fr 92px; gap: 8px; align-items: center;
+  padding: 7px 0; border-bottom: 1px dashed var(--border); }
+.rule-row:last-of-type { border-bottom: 0; }
+.rule-row label { font-size: 13.5px; }
+.rule-row .op { color: var(--muted); font-size: 12px; }
+.rule-row.changed label::after { content: "edited"; margin-left: 6px; font-size: 11px; color: var(--accent);
+  background: var(--accent-soft); padding: 1px 6px; border-radius: 999px; }
+.rid { font: 600 11px ui-monospace, Menlo, monospace; color: var(--muted); margin-right: 4px; }
+input[type=number], input[type=text], select {
+  width: 100%; font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 7px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+button.btn { font: inherit; font-size: 13px; padding: 7px 12px; border-radius: 7px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); }
+button.btn:hover { background: var(--surface-2); }
+button.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button.btn.primary:hover { filter: brightness(1.08); }
+button.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* Summary chips */
+.chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+@media (max-width: 700px) { .chips { grid-template-columns: repeat(2, 1fr); } }
+.chip { border-radius: var(--radius); padding: 10px 12px; border: 1px solid var(--border); background: var(--surface); }
+.chip .n { font-size: 24px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.chip .l { font-size: 12.5px; color: var(--muted); }
+.chip .d { font-size: 12px; font-weight: 600; margin-left: 6px; }
+.chip .d.up { color: var(--fail); } .chip .d.down { color: var(--pass); }
+
+/* Portfolio grid */
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { padding: 7px 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
+th { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
+table.port td.c, table.port th.c { text-align: center; padding: 6px 3px; }
+table.port tbody tr { cursor: pointer; }
+table.port tbody tr:hover { background: var(--surface-2); }
+table.port tr.moved { background: var(--accent-soft); }
+.cell { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
+  font-size: 12px; font-weight: 700; }
+.s-FAIL { background: var(--fail-soft); color: var(--fail); }
+.s-CANT_CHECK { background: var(--cant-soft); color: var(--cant); }
+.s-BORDERLINE { background: var(--border-soft); color: var(--border-s); }
+.s-PASS { background: var(--pass-soft); color: var(--pass); }
+.badge { display: inline-block; font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.o-OUTSIDE_POLICY { background: var(--fail-soft); color: var(--fail); }
+.o-INCOMPLETE { background: var(--cant-soft); color: var(--cant); }
+.o-WITHIN_POLICY_REVIEW { background: var(--border-soft); color: var(--border-s); }
+.o-WITHIN_POLICY { background: var(--pass-soft); color: var(--pass); }
+.was { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 10px; }
+.legend span { display: inline-flex; align-items: center; gap: 5px; }
+.changes li { margin: 4px 0; font-size: 14px; }
+
+/* Review */
+.file-head { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.file-head .meta { flex: 1 1 260px; }
+.file-head h2 { font-size: 20px; }
+.counts { display: flex; gap: 8px; flex-wrap: wrap; }
+details.rule { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
+  margin-top: 10px; box-shadow: var(--shadow); }
+details.rule > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; gap: 10px;
+  align-items: center; flex-wrap: wrap; }
+details.rule > summary::-webkit-details-marker { display: none; }
+details.rule > summary .title { font-weight: 600; }
+details.rule > summary .val { color: var(--muted); font-size: 13.5px; }
+details.rule .body { padding: 0 14px 14px; border-top: 1px solid var(--border); }
+.warn { background: var(--cant-soft); color: var(--cant); padding: 8px 10px; border-radius: 7px; margin: 10px 0; font-size: 13.5px; }
+.err { background: var(--fail-soft); color: var(--fail); padding: 8px 10px; border-radius: 7px; margin-top: 8px; font-size: 13.5px; }
+.ok { background: var(--pass-soft); color: var(--pass); padding: 8px 10px; border-radius: 7px; font-size: 13.5px; }
+.decide { display: grid; grid-template-columns: 260px 1fr; gap: 10px; margin-top: 12px; }
+@media (max-width: 700px) { .decide { grid-template-columns: 1fr; } }
+.decide label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 3px; }
+.note { background: var(--accent-soft); color: var(--text); padding: 8px 12px; border-radius: 8px; font-size: 13.5px; margin-bottom: 12px; }
+.spoiler summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+
+/* Memo */
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 7px 12px; border: 0; background: var(--surface);
+  color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+.memo h4 { font-size: 14px; margin: 14px 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.memo h4:first-child { margin-top: 0; }
+.memo p { margin: 4px 0; }
+.tag { font: 600 10.5px ui-monospace, Menlo, monospace; background: var(--surface-2); color: var(--muted);
+  border: 1px solid var(--border); padding: 0 4px; border-radius: 4px; vertical-align: 1px; }
+mark.bad { background: var(--fail-soft); color: var(--fail); font-weight: 700; padding: 0 2px; border-radius: 3px; }
+.check-line { display: flex; gap: 8px; margin: 8px 0; font-size: 14px; }
+.check-line .ic { width: 20px; flex: none; }
+.progress { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin-top: 8px; }
+.progress > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
+.ai-box { margin-top: 12px; padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+.cursor::after { content: "▍"; animation: blink 1s steps(2) infinite; color: var(--accent); }
+@keyframes blink { 50% { opacity: 0; } }
+
+/* About */
+.glossary dt { font-weight: 600; margin-top: 8px; }
+.glossary dd { margin: 0 0 4px; color: var(--muted); }
+footer { padding: 24px 0 40px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); }
+
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap top-inner">
+    <div class="brand"><div class="mark">✓</div>Credit Policy Desk</div>
+    <div class="pills">
+      <span class="pill good">Runs in your browser</span>
+      <span class="pill good">No API key</span>
+      <span class="pill">Made-up data</span>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="hero">
+    <h1>Check loan files against the lender's own policy, before the memo reaches a reviewer.</h1>
+    <p>AI can draft a credit memo in minutes. A reviewer still asks two things: <b>does this loan break our policy?</b>
+      and <b>can I trust the numbers?</b> Here, code makes every decision, AI only writes, and code checks what the AI wrote.</p>
+    <div class="flow">
+      <div class="step"><b>1 · Code reads</b><span>Each number, with the document and page it came from</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>2 · Code decides</b><span>Every rule: fails, can't check, borderline or passes</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>3 · AI writes</b><span>A small model in your browser drafts the memo</span></div>
+      <div class="arrow">→</div>
+      <div class="step"><b>4 · Code checks</b><span>Every number, citation and the outcome, before a human sees it</span></div>
+    </div>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="portfolio" aria-selected="true">1 · Policy what-if</button>
+    <button role="tab" data-tab="review" aria-selected="false">2 · Review a file</button>
+    <button role="tab" data-tab="memo" aria-selected="false">3 · Memo + AI check</button>
+    <button role="tab" data-tab="about" aria-selected="false">4 · How well it works</button>
+  </nav>
+
+  <section class="panel active" id="tab-portfolio">
+    <div class="grid-2">
+      <div class="card">
+        <h3>Lender policy</h3>
+        <p class="muted" style="margin:0 0 8px;font-size:13px">Change a limit and all 12 files re-check instantly.</p>
+        <div id="policy-rows"></div>
+        <div class="rule-row"><label><span class="rid">±</span>Borderline zone <span class="op">(% of limit)</span></label>
+          <input type="number" id="margin" min="0" max="25" step="1"></div>
+        <div class="btns">
+          <button class="btn" data-preset="tight">Downturn: tighten</button>
+          <button class="btn" data-preset="loose">Growth push: loosen</button>
+          <button class="btn" data-preset="reset">Reset</button>
+        </div>
+      </div>
+      <div>
+        <div class="chips" id="chips"></div>
+        <div class="card">
+          <h3>12 loan files × 10 rules <small style="font-weight:400">· click a row to review it</small></h3>
+          <div class="table-wrap"><table class="port" id="port"></table></div>
+          <div class="legend">
+            <span><i class="cell s-FAIL">✕</i>Fails</span><span><i class="cell s-CANT_CHECK">?</i>Can't check</span>
+            <span><i class="cell s-BORDERLINE">!</i>Borderline</span><span><i class="cell s-PASS">✓</i>Passes</span>
+          </div>
+        </div>
+        <div class="card" id="changes-card">
+          <h3>What changed vs. the original policy</h3>
+          <div id="changes"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-review">
+    <div id="policy-note"></div>
+    <div class="card">
+      <div class="file-head">
+        <div style="flex:0 1 300px"><select id="borrower" aria-label="Choose a loan file"></select></div>
+        <div class="meta" id="file-meta"></div>
+      </div>
+      <details class="spoiler" style="margin-top:10px"><summary>What was planted in this file (spoiler)</summary><p id="planted" style="margin:6px 0 0"></p></details>
+    </div>
+    <h3 style="margin:18px 0 0">Check these first</h3>
+    <div id="queue"></div>
+    <div class="card" style="margin-top:18px">
+      <h3>Audit log</h3>
+      <div id="audit"></div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-memo">
+    <div class="card">
+      <div class="row" style="justify-content:space-between">
+        <div class="row">
+          <span class="muted" style="font-size:13px">Memo for</span>
+          <select id="memo-borrower" style="width:auto"></select>
+        </div>
+        <div class="seg" role="group" aria-label="Who writes the memo">
+          <button data-writer="template" aria-pressed="true">Template (instant)</button>
+          <button data-writer="ai" aria-pressed="false">On-device AI</button>
+        </div>
+      </div>
+      <div class="ai-box" id="ai-box" hidden>
+        <div class="row">
+          <select id="model" style="width:auto"></select>
+          <button class="btn" id="load-model">Load model</button>
+          <button class="btn primary" id="write-ai" disabled>Write memo</button>
+        </div>
+        <div class="progress" id="progress" hidden><div></div></div>
+        <p class="muted" id="ai-status" style="font-size:13px;margin:8px 0 0"></p>
+      </div>
+      <label class="toggle" style="margin-top:12px"><input type="checkbox" id="plant"> Demo: plant a wrong number in the memo, to see the check catch it</label>
+    </div>
+    <div class="grid-memo" style="margin-top:14px">
+      <div class="card"><div class="memo" id="memo-text"></div></div>
+      <div class="card"><h3>Checks on this memo (code, not AI)</h3><div id="memo-checks"></div></div>
+    </div>
+  </section>
+
+  <section class="panel" id="tab-about">
+    <div class="grid-memo">
+      <div>
+        <div class="card">
+          <h3>Rule engine vs. answers written by hand</h3>
+          <div id="eval-rules"></div>
+        </div>
+        <div class="card">
+          <h3>AI memo test (runs on this device)</h3>
+          <p style="margin-top:0">The on-device model writes a memo for all 12 files. Code checks each one. A memo with a wrong number,
+            a sentence with no source, or a changed outcome is blocked.</p>
+          <div class="row"><button class="btn primary" id="run-ai-test">Run AI test on 12 files</button>
+            <span class="muted" id="ai-test-status" style="font-size:13px"></span></div>
+          <div id="ai-test" style="margin-top:10px"></div>
+        </div>
+      </div>
+      <div>
+        <div class="card">
+          <h3>Why the AI runs in the browser</h3>
+          <p style="margin-top:0">Borrower files hold bank statements and tax data. Here the model is downloaded once and runs on this
+            device through WebGPU, so no file leaves the laptop and no API key is needed. Code, not the model, decides every result,
+            so a small model is enough: its job is only to write.</p>
+          <p class="muted" style="font-size:13px">Model: open-source, via WebLLM. Needs a browser with WebGPU (recent Chrome or Edge on desktop).</p>
+        </div>
+        <div class="card">
+          <h3>Terms used here</h3>
+          <dl class="glossary" id="glossary"></dl>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <!-- Edit this line with your name and links -->
+    Built by <b>Sanyam Gaur</b> as a product exploration. All borrowers, numbers and the lender policy are made up.
+    Not affiliated with any lender or company.
+  </div>
+</footer>
+
+<script>window.__DATA__ = {"policy": {"name": "Sample NBFC policy for small-business term loans (made up for this demo)", "note": "Every rule and number here is invented for a demo. It is not any real lender's policy.", "borderline_margin_pct": 5, "rules": [{"id": "R1", "short": "Business age", "text": "The business must have been operating for at least 3 years.", "metric": "vintage_years", "op": ">=", "threshold": 3, "unit": "years"}, {"id": "R2", "short": "Promoter bureau score", "text": "The promoter's credit bureau score must be at least 700.", "metric": "bureau_score", "op": ">=", "threshold": 700, "unit": ""}, {"id": "R3", "short": "Worst repayment delay", "text": "No loan repayment may have been more than 30 days late in the last 12 months.", "metric": "max_dpd_12m", "op": "<=", "threshold": 30, "unit": "days"}, {"id": "R4", "short": "DSCR", "text": "DSCR (yearly cash profit divided by yearly loan repayments, including the new loan) must be at least 1.25.", "metric": "dscr", "op": ">=", "threshold": 1.25, "unit": "x"}, {"id": "R5", "short": "Debt to EBITDA", "text": "Total debt, including the new loan, must not exceed 3.5 times yearly cash profit (EBITDA).", "metric": "debt_to_ebitda", "op": "<=", "threshold": 3.5, "unit": "x"}, {"id": "R6", "short": "Current ratio", "text": "Current ratio (short-term assets divided by short-term liabilities) must be at least 1.2.", "metric": "current_ratio", "op": ">=", "threshold": 1.2, "unit": "x"}, {"id": "R7", "short": "GST sales vs audited revenue", "text": "Sales reported in GST returns must be within 10% of revenue in the audited financials.", "metric": "gst_vs_revenue_gap_pct", "op": "<=", "threshold": 10, "unit": "%"}, {"id": "R8", "short": "Bank receipts vs GST sales", "text": "Money received in the bank must be at least 80% of GST-reported sales.", "metric": "bank_to_gst_pct", "op": ">=", "threshold": 80, "unit": "%"}, {"id": "R9", "short": "Bounced payments", "text": "No more than 1 bounced cheque or EMI in the last 6 months.", "metric": "bounces_6m", "op": "<=", "threshold": 1, "unit": ""}, {"id": "R10", "short": "Required documents", "text": "All required documents must be present: KYC, bureau report, audited financials for 2 years, 12 months of GST returns and 12 months of bank statements.", "metric": "documents_complete", "op": "==", "threshold": true, "unit": ""}]}, "borrowers": [{"id": "B01", "name": "Borrower A", "industry": "Packaging", "synthetic": true, "planted_problem": "Nothing planted: a clean file.", "application_date": "2026-11-10", "loan_request": {"amount_lakh": 150, "tenure_months": 60, "annual_rate_pct": 14}, "documents": {"kyc": {"present": true, "incorporation_date": "2016-05-12", "pages": {"incorporation_date": 1}}, "bureau": {"present": true, "promoter_score": 742, "max_dpd_12m": 0, "pages": {"promoter_score": 1, "max_dpd_12m": 3}}, "financials_fy26": {"present": true, "revenue": 1200, "ebitda": 180, "existing_annual_debt_service": 60, "existing_debt": 250, "current_assets": 400, "current_liabilities": 280, "pages": {"revenue": 4, "ebitda": 5, "existing_annual_debt_service": 18, "existing_debt": 11, "current_assets": 3, "current_liabilities": 3}}, "financials_fy25": {"present": true, "revenue": 1080, "ebitda": 160, "pages": {"revenue": 4, "ebitda": 5}}, "gst_fy26": {"present": true, "months_filed": 12, "turnover": 1180, "pages": {"turnover": 1, "months_filed": 1}}, "bank_fy26": {"present": true, "months": 12, "total_credits": 1050, "bounces_6m": 0, "pages": {"total_credits": 2, "bounces_6m": 9}}}, "expected": {"R1": "PASS", "R2": "PASS", "R3": "PASS", "R4": "PASS", "R5": "PASS", "R6": "PASS", "R7": "PASS", "R8": "PASS", "R9": "PASS", "R10": "PASS"}}, {"id": "B02", "name": "Borrower B", "industry": "Auto components", "synthetic": true, "planted_problem": "Profit too low to cover repayments.", "application_date": "2026-11-10", "loan_request": {"amount_lakh": 150, "tenure_months": 60, "annual_rate_pct": 14}, "documents": {"kyc": {"present": true, "incorporation_date": "2016-05-12", "pages": {"incorporation_date": 1}}, "bureau": {"present": true, "promoter_score": 742, "max_dpd_12m": 0, "pages": {"promoter_score": 1, "max_dpd_12m": 3}}, "financials_fy26": {"present": true, "revenue": 1200, "ebitda": 120, "existing_annual_debt_service": 70, "existing_debt": 200, "current_assets": 400, "current_liabilities": 280, "pages": {"revenue": 4, "ebitda": 5, "existing_annual_debt_service": 18, "existing_debt": 11, "current_assets": 3, "current_liabilities": 3}}, "financials_fy25": {"present": true, "revenue": 1080, "ebitda": 160, "pages": {"revenue": 4, "ebitda": 5}}, "gst_fy26": {"present": true, "months_filed": 12, "turnover": 1180, "pages": {"turnover": 1, "months_filed": 1}}, "bank_fy26": {"present": true, "months": 12, "total_credits": 1050, "bounces_6m": 0, "pages": {"total_credits": 2, "bounces_6m": 9}}}, "expected": {"R1": "PASS", "R2": "PASS", "R3": "PASS", "R4": "FAIL", "R5": "PASS", "R6": "PASS", "R7": "PASS", "R8": "PASS", "R9": "PASS", "R10": "PASS"}}, {"id": "B03", "name": "Borrower C", "industry": "Textiles", "synthetic": true, "planted_problem": "Audited revenue is much higher than GST sales.", "application_date": "2026-11-10", "loan_request": {"amount_lakh": 150, "tenure_months": 60, "annual_rate_pct": 14}, "documents": {"kyc": {"present": true, "incorporation_date": "2016-05-12", "pages": {"incorporation_date": 1}}, "bureau": {"present": true, "promoter_score": 742, "max_dpd_12m": 0, "pages": {"promoter_score": 1, "max_dpd_12m": 3}}, "financials_fy26": {"present": true, "revenue": 1500, "ebitda": 180, "existing_annual_debt_service": 60, "existing_debt": 250, "current_assets": 400, "current_liabilities": 280, "pages": {"revenue": 4, "ebitda": 5, "existing_annual_debt_service": 18, "existing_debt": 11, "current_assets": 3, "current_liabilities": 3}}, "financials_fy25": {"present": true, "revenue": 1080, "ebitda": 160, "pages": {"revenue": 4, "ebitda": 5}}, "gst_fy26": {"present": true, "months_filed": 12, "turnover": 1180, "pages": {"turnover": 1, "months_filed": 1}}, "bank_fy26": {"present": true, "months": 12, "total_credits": 1050, "bounces_6m": 0, "pages": {"total_credits": 2, "bounces_6m": 9}}}, "expected": {"R1": "PASS", "R2": "PASS", "R3": "PASS", "R4": "PASS", "R5": "PASS", "R6": "PASS", "R7": "FAIL", "R8": "PASS", "R9": "PASS", "R10": "PASS"}}, {"id": "B04", "name": "Borrower D", "industry": "Food processing", "synthetic": true, "planted_problem": "Bank receipts far below GST sales.", "application_date": "2026-11-10", "loan_request": {"amount_lakh": 150, "tenure_months": 60, "annual_rate_pct": 14}, "documents": {"kyc": {"present": true, "incorporation_date": "2016-05-12", "pages": {"incorporation_date": 1}}, "bureau": {"present": true, "promoter_score": 742, "max_dpd_12m": 0, "pages": {"promoter_score": 1, "max_dpd_12m": 3}}, "financials_fy26": {"present": true, "revenue": 1200, "ebitda": 180, "existing_annual_debt_service": 60, "existing_debt": 250, "current_assets": 400, "current_liabilities": 280, "pages": {"revenue": 4, "ebitda": 5, "existing_annual_debt_service": 18, "existing_debt": 11, "current_assets": 3, "current_liabilities": 3}}, "financials_fy25": {"present": true, "revenue": 1080, "ebitda": 160, "pages": {"revenue": 4, "ebitda": 5}}, "gst_fy26": {"present": true, "months_filed": 12, "turnover": 1180, "pages": {"turnover": 1, "months_filed": 1}}, "bank_fy26": {"present": true, "months": 12, "total_credits": 650, "bounces_6m": 0, "pages": {"total_credits": 2, "bounces_6m": 9}}}, "expected": {"R1": "PASS", "R2": "PASS", "R3": "PASS", "R4": "PASS", "R5": "PASS", "R6": "PASS", "R7": "PASS", "R8": "FAIL", "R9": "PASS", "R10": "PASS"}}, {"id": "B05", "name": "Borrower E", "industry": "Pharma packaging", "synthetic": true, "planted_problem": "Bank statements not submitted.", "application_date": "2026-11-10", "loan_request": {"amount_lakh": 150, "tenure_months": 60, "annual_rate_pct": 14}, "documents": {"kyc": {"present": true, "incorporation_date": "2016-05-12", "pages": {"incorporation_date": 1}}, "bureau": {"present": true, "promoter_score": 742, "max_dpd_12m": 0, "pages": {"promoter_score": 1, "max_dpd_12m": 3}}, "financials_fy26": {"present": true, "revenue": 1200, "ebitda": 180, "existing_annual_debt_service": 60, "existing_debt": 250, "current_assets": 400, "current_liabilities": 280, "pages": {"revenue": 4, "ebitda": 5, "existing_annual_debt_service": 18, "existing_debt": 11, "current_assets": 3, "current_liabilities": 3}}, "financials_fy25": {"present": true, "revenue": 1080, "ebitda": 160, "pages": {"revenue": 4, "ebitda": 5}}, "gst_fy26": {"present": true, "months_filed": 12, "turnover": 1180, "pages": {"turnover": 1, "months_filed": 1}}, "bank_fy26": {"present": false}}, "expected": {"R1": "PASS", "R2": "PASS", "R3": "PASS", "R4": "PASS", "R5": "PASS", "R6": "PASS", "R7": "PASS", "R8": "CANT_CHECK", "R9": "CANT_CHECK", "R10": "FAIL"}}, {"id": "B06", "name": "Borrower F", "industry": "Steel fabrication", "synthetic": true, "planted_problem": "DSCR just above the minimum.", "application_date": "2026-11-10", "loan_request": {"amount_lakh": 150, "tenure_months": 60, "annual_rate_pct": 14}, "documents": {"kyc": {"present": true, "incorporation_date": "2016-05-12", "pages": {"incorporation_date": 1}}, "bureau": {"present": true, "promoter_score": 742, "max_dpd_12m": 0, "pages": {"promoter_score": 1, "max_dpd_12m": 3}}, "financials_fy26": {"present": true, "revenue": 1200, "ebitda": 135, "existing_annual_debt_service": 62, "existing_debt": 230, "current_assets": 400, "current_liabilities": 280, "pages": {"revenue": 4, "ebitda": 5, "existing_annual_debt_service": 18, "existing_debt": 11, "current_assets": 3, "current_liabilities": 3}}, "financials_fy25": {"present": true, "revenue": 1080, "ebitda": 160, "pages": {"revenue": 4, "ebitda": 5}}, "gst_fy26": {"present": true, "months_filed": 12, "turnover": 1180, "pages": {"turnover": 1, "months_filed": 1}}, "bank_fy26": {"present": true, "months": 12, "total_credits": 1050, "bounces_6m": 0, "pages": {"total_credits": 2, "bounces_6m": 9}}}, "expected": {"R1": "PASS", "R2": "PASS", "R3": "PASS", "R4": "BORDERLINE", "R5": "PASS", "R6": "PASS", "R7": "PASS", "R8": "PASS", "R9": "PASS", "R10": "PASS"}}, {"id": "B07", "name": "Borrower G", "industry": "Seafood export", "synthetic": true, "planted_problem": "Weak credit history.", "application_date": "2026-11-10", "loan_request": {"amount_lakh": 150, "tenure_months": 60, "annual_rate_pct": 14}, "documents": {"kyc": {"present": true, "incorporation_date": "2016-05-12", "pages": {"incorporation_date": 1}}, "bureau": {"present": true, "promoter_score": 655, "max_dpd_12m": 60, "pages": {"promoter_score": 1, "max_dpd_12m": 3}}, "financials_fy26": {"present": true, "revenue": 1200, "ebitda": 180, "existing_annual_debt_service": 60, "existing_debt": 250, "current_assets": 400, "current_liabilities": 280, "pages": {"revenue": 4, "ebitda": 5, "existing_annual_debt_service": 18, "existing_debt": 11, "current_assets": 3, "current_liabilities": 3}}, "financials_fy25": {"present": true, "revenue": 1080, "ebitda": 160, "pages": {"revenue": 4, "ebitda": 5}}, "gst_fy26": {"present": true, "months_filed": 12, "turnover": 1180, "pages": {"turnover": 1, "months_filed": 1}}, "bank_fy26": {"present": true, "months": 12, "total_credits": 1050, "bounces_6m": 0, "pages": {"total_credits": 2, "bounces_6m": 9}}}, "expected": {"R1": "PASS", "R2": "FAIL", "R3": "FAIL", "R4": "PASS", "R5": "PASS", "R6": "PASS", "R7": "PASS", "R8": "PASS", "R9": "PASS", "R10": "PASS"}}, {"id": "B08", "name": "Borrower H", "industry": "Printing", "synthetic": true, "planted_problem": "Young business with only one audited year.", "application_date": "2026-11-10", "loan_request": {"amount_lakh": 60, "tenure_months": 36, "annual_rate_pct": 15}, "documents": {"kyc": {"present": true, "incorporation_date": "2024-08-01", "pages": {"incorporation_date": 1}}, "bureau": {"present": true, "promoter_score": 742, "max_dpd_12m": 0, "pages": {"promoter_score": 1, "max_dpd_12m": 3}}, "financials_fy26": {"present": true, "revenue": 420, "ebitda": 55, "existing_annual_debt_service": 10, "existing_debt": 30, "current_assets": 150, "current_liabilities": 110, "pages": {"revenue": 4, "ebitda": 5, "existing_annual_debt_service": 14, "existing_debt": 9, "current_assets": 3, "current_liabilities": 3}}, "financials_fy25": {"present": false}, "gst_fy26": {"present": true, "months_filed": 12, "turnover": 410, "pages": {"turnover": 1, "months_filed": 1}}, "bank_fy26": {"present": true, "months": 12, "total_credits": 370, "bounces_6m": 0, "pages": {"total_credits": 2, "bounces_6m": 9}}}, "expected": {"R1": "FAIL", "R2": "PASS", "R3": "PASS", "R4": "PASS", "R5": "PASS", "R6": "PASS", "R7": "PASS", "R8": "PASS", "R9": "PASS", "R10": "FAIL"}}, {"id": "B09", "name": "Borrower I", "industry": "Spice trading", "synthetic": true, "planted_problem": "Too much debt.", "application_date": "2026-11-10", "loan_request": {"amount_lakh": 150, "tenure_months": 60, "annual_rate_pct": 14}, "documents": {"kyc": {"present": true, "incorporation_date": "2016-05-12", "pages": {"incorporation_date": 1}}, "bureau": {"present": true, "promoter_score": 742, "max_dpd_12m": 0, "pages": {"promoter_score": 1, "max_dpd_12m": 3}}, "financials_fy26": {"present": true, "revenue": 1200, "ebitda": 180, "existing_annual_debt_service": 80, "existing_debt": 520, "current_assets": 400, "current_liabilities": 280, "pages": {"revenue": 4, "ebitda": 5, "existing_annual_debt_service": 18, "existing_debt": 11, "current_assets": 3, "current_liabilities": 3}}, "financials_fy25": {"present": true, "revenue": 1080, "ebitda": 160, "pages": {"revenue": 4, "ebitda": 5}}, "gst_fy26": {"present": true, "months_filed": 12, "turnover": 1180, "pages": {"turnover": 1, "months_filed": 1}}, "bank_fy26": {"present": true, "months": 12, "total_credits": 1050, "bounces_6m": 0, "pages": {"total_credits": 2, "bounces_6m": 9}}}, "expected": {"R1": "PASS", "R2": "PASS", "R3": "PASS", "R4": "PASS", "R5": "FAIL", "R6": "PASS", "R7": "PASS", "R8": "PASS", "R9": "PASS", "R10": "PASS"}}, {"id": "B10", "name": "Borrower J", "industry": "Ceramics", "synthetic": true, "planted_problem": "Three bounced EMIs, and short-term liabilities unreadable on a scanned page.", "application_date": "2026-11-10", "loan_request": {"amount_lakh": 150, "tenure_months": 60, "annual_rate_pct": 14}, "documents": {"kyc": {"present": true, "incorporation_date": "2016-05-12", "pages": {"incorporation_date": 1}}, "bureau": {"present": true, "promoter_score": 742, "max_dpd_12m": 0, "pages": {"promoter_score": 1, "max_dpd_12m": 3}}, "financials_fy26": {"present": true, "revenue": 1200, "ebitda": 180, "existing_annual_debt_service": 60, "existing_debt": 250, "current_assets": 400, "current_liabilities": null, "pages": {"revenue": 4, "ebitda": 5, "existing_annual_debt_service": 18, "existing_debt": 11, "current_assets": 3, "current_liabilities": 3}}, "financials_fy25": {"present": true, "revenue": 1080, "ebitda": 160, "pages": {"revenue": 4, "ebitda": 5}}, "gst_fy26": {"present": true, "months_filed": 12, "turnover": 1180, "pages": {"turnover": 1, "months_filed": 1}}, "bank_fy26": {"present": true, "months": 12, "total_credits": 1050, "bounces_6m": 3, "pages": {"total_credits": 2, "bounces_6m": 9}}}, "expected": {"R1": "PASS", "R2": "PASS", "R3": "PASS", "R4": "PASS", "R5": "PASS", "R6": "CANT_CHECK", "R7": "PASS", "R8": "PASS", "R9": "FAIL", "R10": "PASS"}}, {"id": "B11", "name": "Borrower K", "industry": "Tea processing", "synthetic": true, "planted_problem": "Only 9 of 12 months of GST returns filed.", "application_date": "2026-11-10", "loan_request": {"amount_lakh": 150, "tenure_months": 60, "annual_rate_pct": 14}, "documents": {"kyc": {"present": true, "incorporation_date": "2016-05-12", "pages": {"incorporation_date": 1}}, "bureau": {"present": true, "promoter_score": 742, "max_dpd_12m": 0, "pages": {"promoter_score": 1, "max_dpd_12m": 3}}, "financials_fy26": {"present": true, "revenue": 1200, "ebitda": 180, "existing_annual_debt_service": 60, "existing_debt": 250, "current_assets": 400, "current_liabilities": 280, "pages": {"revenue": 4, "ebitda": 5, "existing_annual_debt_service": 18, "existing_debt": 11, "current_assets": 3, "current_liabilities": 3}}, "financials_fy25": {"present": true, "revenue": 1080, "ebitda": 160, "pages": {"revenue": 4, "ebitda": 5}}, "gst_fy26": {"present": true, "months_filed": 9, "turnover": 885, "pages": {"turnover": 1, "months_filed": 1}}, "bank_fy26": {"present": true, "months": 12, "total_credits": 1050, "bounces_6m": 0, "pages": {"total_credits": 2, "bounces_6m": 9}}}, "expected": {"R1": "PASS", "R2": "PASS", "R3": "PASS", "R4": "PASS", "R5": "PASS", "R6": "PASS", "R7": "CANT_CHECK", "R8": "CANT_CHECK", "R9": "PASS", "R10": "FAIL"}}, {"id": "B12", "name": "Borrower L", "industry": "Plastics", "synthetic": true, "planted_problem": "Several problems: low current ratio, GST gap near the limit, bureau score near the limit.", "application_date": "2026-11-10", "loan_request": {"amount_lakh": 150, "tenure_months": 60, "annual_rate_pct": 14}, "documents": {"kyc": {"present": true, "incorporation_date": "2016-05-12", "pages": {"incorporation_date": 1}}, "bureau": {"present": true, "promoter_score": 720, "max_dpd_12m": 0, "pages": {"promoter_score": 1, "max_dpd_12m": 3}}, "financials_fy26": {"present": true, "revenue": 1200, "ebitda": 180, "existing_annual_debt_service": 60, "existing_debt": 250, "current_assets": 300, "current_liabilities": 340, "pages": {"revenue": 4, "ebitda": 5, "existing_annual_debt_service": 18, "existing_debt": 11, "current_assets": 3, "current_liabilities": 3}}, "financials_fy25": {"present": true, "revenue": 1080, "ebitda": 160, "pages": {"revenue": 4, "ebitda": 5}}, "gst_fy26": {"present": true, "months_filed": 12, "turnover": 1084.8, "pages": {"turnover": 1, "months_filed": 1}}, "bank_fy26": {"present": true, "months": 12, "total_credits": 1050, "bounces_6m": 0, "pages": {"total_credits": 2, "bounces_6m": 9}}}, "expected": {"R1": "PASS", "R2": "BORDERLINE", "R3": "PASS", "R4": "PASS", "R5": "PASS", "R6": "FAIL", "R7": "BORDERLINE", "R8": "PASS", "R9": "PASS", "R10": "PASS"}}]};</script>
+<script>
+/* Rule engine + memo checks, in JavaScript (same logic as engine.py and memo.py).
+ * Plain code makes every decision here. No AI.
+ * Works in the browser (window.CAM) and in Node (module.exports) for testing. */
+(function (root) {
+  "use strict";
+
+  const STATUS_ORDER = { FAIL: 0, CANT_CHECK: 1, BORDERLINE: 2, PASS: 3 };
+  const STATUS_LABEL = { FAIL: "Fails policy", CANT_CHECK: "Can't check", BORDERLINE: "Borderline", PASS: "Passes" };
+  const DOC_TITLES = {
+    application: "Loan application form",
+    kyc: "KYC / incorporation certificate",
+    bureau: "Credit bureau report",
+    financials_fy26: "Audited financials FY26",
+    financials_fy25: "Audited financials FY25",
+    gst_fy26: "GST returns FY26",
+    bank_fy26: "Bank statements FY26",
+  };
+
+  class Missing extends Error {}
+
+  const round = (v, d) => Math.round(v * 10 ** d) / 10 ** d;
+
+  function yearlyRepayment(amount, months, ratePct) {
+    const r = ratePct / 1200;
+    if (r === 0) return (amount / months) * 12;
+    const f = Math.pow(1 + r, months);
+    return ((amount * r * f) / (f - 1)) * 12;
+  }
+
+  class Trail {
+    constructor(b) { this.b = b; this.inputs = []; this.missingDocs = []; }
+    doc(key) {
+      const d = this.b.documents[key];
+      if (!d || !d.present) throw new Missing(`${DOC_TITLES[key]} not provided`);
+      return d;
+    }
+    field(docKey, field, label, unit = "") {
+      const d = this.doc(docKey);
+      const value = d[field];
+      if (value === null || value === undefined) throw new Missing(`${label} could not be read from ${DOC_TITLES[docKey]}`);
+      const page = (d.pages || {})[field];
+      this.inputs.push({ label, value, unit, source: DOC_TITLES[docKey] + (page ? `, page ${page}` : "") });
+      return value;
+    }
+    months(docKey, field, needed) {
+      const d = this.doc(docKey);
+      const got = d[field] || 0;
+      if (got < needed) throw new Missing(`${DOC_TITLES[docKey]} cover only ${got} of ${needed} months`);
+      this.inputs.push({ label: `${DOC_TITLES[docKey]}: months covered`, value: got, unit: "months", source: DOC_TITLES[docKey] });
+      return got;
+    }
+    application(field, label, unit = "") {
+      const value = this.b.loan_request[field];
+      this.inputs.push({ label, value, unit, source: DOC_TITLES.application });
+      return value;
+    }
+    derived(label, value, unit, how) {
+      this.inputs.push({ label, value: round(value, 2), unit, source: `Calculated: ${how}` });
+      return value;
+    }
+  }
+
+  function newLoanYearly(t) {
+    const amt = t.application("amount_lakh", "Loan asked for", "Rs lakh");
+    const months = t.application("tenure_months", "Tenure", "months");
+    const rate = t.application("annual_rate_pct", "Interest rate", "%");
+    return t.derived("New loan: yearly repayments", yearlyRepayment(amt, months, rate), "Rs lakh",
+      `EMI on Rs ${amt} lakh over ${months} months at ${rate}% x 12`);
+  }
+
+  const METRICS = {
+    vintage_years(t) {
+      const inc = t.field("kyc", "incorporation_date", "Date of incorporation");
+      const app = t.b.application_date;
+      t.inputs.push({ label: "Application date", value: app, unit: "", source: DOC_TITLES.application });
+      const days = (Date.parse(app) - Date.parse(inc)) / 86400000;
+      return [days / 365.25, `(${app} - ${inc}) / 365.25 days`];
+    },
+    bureau_score(t) { return [t.field("bureau", "promoter_score", "Promoter bureau score"), "Read directly from the bureau report"]; },
+    max_dpd_12m(t) { return [t.field("bureau", "max_dpd_12m", "Worst days-past-due in last 12 months", "days"), "Read directly from the bureau report"]; },
+    dscr(t) {
+      const ebitda = t.field("financials_fy26", "ebitda", "EBITDA (yearly cash profit)", "Rs lakh");
+      const existing = t.field("financials_fy26", "existing_annual_debt_service", "Existing loans: yearly repayments", "Rs lakh");
+      const nw = newLoanYearly(t);
+      return [ebitda / (existing + nw), `${ebitda} / (${existing} + ${nw.toFixed(2)})`];
+    },
+    debt_to_ebitda(t) {
+      const ebitda = t.field("financials_fy26", "ebitda", "EBITDA (yearly cash profit)", "Rs lakh");
+      const existing = t.field("financials_fy26", "existing_debt", "Existing debt", "Rs lakh");
+      const amt = t.application("amount_lakh", "Loan asked for", "Rs lakh");
+      return [(existing + amt) / ebitda, `(${existing} + ${amt}) / ${ebitda}`];
+    },
+    current_ratio(t) {
+      const ca = t.field("financials_fy26", "current_assets", "Current assets", "Rs lakh");
+      const cl = t.field("financials_fy26", "current_liabilities", "Current liabilities", "Rs lakh");
+      return [ca / cl, `${ca} / ${cl}`];
+    },
+    gst_vs_revenue_gap_pct(t) {
+      t.months("gst_fy26", "months_filed", 12);
+      const gst = t.field("gst_fy26", "turnover", "GST-reported sales", "Rs lakh");
+      const rev = t.field("financials_fy26", "revenue", "Audited revenue", "Rs lakh");
+      return [(Math.abs(gst - rev) / rev) * 100, `|${gst} - ${rev}| / ${rev} x 100`];
+    },
+    bank_to_gst_pct(t) {
+      t.months("gst_fy26", "months_filed", 12);
+      t.months("bank_fy26", "months", 12);
+      const credits = t.field("bank_fy26", "total_credits", "Money received in bank", "Rs lakh");
+      const gst = t.field("gst_fy26", "turnover", "GST-reported sales", "Rs lakh");
+      return [(credits / gst) * 100, `${credits} / ${gst} x 100`];
+    },
+    bounces_6m(t) {
+      t.months("bank_fy26", "months", 6);
+      return [t.field("bank_fy26", "bounces_6m", "Bounced cheques/EMIs, last 6 months"), "Counted from the bank statement"];
+    },
+    documents_complete(t) {
+      const docs = t.b.documents;
+      for (const key of ["kyc", "bureau", "financials_fy26", "financials_fy25"]) {
+        const ok = !!(docs[key] && docs[key].present);
+        t.inputs.push({ label: DOC_TITLES[key], value: ok ? "Present" : "Missing", unit: "", source: "Document checklist" });
+        if (!ok) t.missingDocs.push(DOC_TITLES[key]);
+      }
+      for (const [key, field] of [["gst_fy26", "months_filed"], ["bank_fy26", "months"]]) {
+        const d = docs[key] || {};
+        if (!d.present) {
+          t.inputs.push({ label: DOC_TITLES[key], value: "Missing", unit: "", source: "Document checklist" });
+          t.missingDocs.push(DOC_TITLES[key]);
+          continue;
+        }
+        const got = d[field] || 0;
+        t.inputs.push({ label: DOC_TITLES[key], value: `${got} of 12 months`, unit: "", source: "Document checklist" });
+        if (got < 12) t.missingDocs.push(`${DOC_TITLES[key]} (only ${got} of 12 months)`);
+      }
+      return [t.missingDocs.length === 0, "Checklist of required documents"];
+    },
+  };
+
+  function judge(value, rule, margin) {
+    const { op, threshold: limit } = rule;
+    if (op === "==") return value === limit ? "PASS" : "FAIL";
+    const v = round(value, 4);
+    if (op === ">=") return v < limit ? "FAIL" : v < limit * (1 + margin) ? "BORDERLINE" : "PASS";
+    if (op === "<=") return v > limit ? "FAIL" : v > limit * (1 - margin) ? "BORDERLINE" : "PASS";
+    throw new Error(`Unknown operator ${op}`);
+  }
+
+  function fmt(value, unit) {
+    if (value === null || value === undefined) return "-";
+    if (typeof value === "boolean") return value ? "Yes" : "No";
+    if (typeof value === "number") {
+      if (unit === "%") return `${value.toFixed(1)}%`;
+      if (unit === "x") return `${value.toFixed(2)}x`;
+      if (unit === "years") return `${value.toFixed(1)} years`;
+      if (unit === "days") return `${value} days`;
+      if (unit === "Rs lakh") {
+        const s = value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return `Rs ${s} lakh`.replace(".00 lakh", " lakh");
+      }
+    }
+    return `${value} ${unit}`.trim();
+  }
+
+  function recommend(results) {
+    const isDocs = (r) => r.metric === "documents_complete";
+    const fails = results.filter((r) => r.status === "FAIL" && !isDocs(r)).map((r) => r.id);
+    const incomplete = results.filter((r) => r.status === "CANT_CHECK" || (isDocs(r) && r.status === "FAIL")).map((r) => r.id);
+    const border = results.filter((r) => r.status === "BORDERLINE").map((r) => r.id);
+    if (fails.length) return { code: "OUTSIDE_POLICY", label: "Outside policy",
+      explain: "Decline, or approve only as a documented deviation signed off by a senior credit officer.", rules: fails.concat(incomplete) };
+    if (incomplete.length) return { code: "INCOMPLETE", label: "Incomplete file",
+      explain: "Collect the missing documents before taking a credit decision.", rules: incomplete };
+    if (border.length) return { code: "WITHIN_POLICY_REVIEW", label: "Within policy, with borderline items",
+      explain: "Within policy, but a reviewer should look at the borderline items first.", rules: border };
+    return { code: "WITHIN_POLICY", label: "Within policy", explain: "Every rule passes comfortably.", rules: [] };
+  }
+
+  function evaluate(borrower, policy) {
+    const margin = (policy.borderline_margin_pct ?? 5) / 100;
+    const results = policy.rules.map((rule) => {
+      const t = new Trail(borrower);
+      let value = null, how = null, status, reason = null;
+      try {
+        [value, how] = METRICS[rule.metric](t);
+        status = judge(value, rule, margin);
+        if (rule.metric === "documents_complete" && !value) reason = "Missing: " + t.missingDocs.join("; ");
+      } catch (e) {
+        if (!(e instanceof Missing)) throw e;
+        value = null; how = null; status = "CANT_CHECK"; reason = e.message;
+      }
+      return {
+        id: rule.id, short: rule.short, text: rule.text, metric: rule.metric, op: rule.op,
+        threshold: rule.threshold, unit: rule.unit, value, status, reason, how, inputs: t.inputs,
+        value_display: value === true ? "All present" : value === false ? "Incomplete" : fmt(value, rule.unit),
+        threshold_display: rule.op === "==" ? "all present"
+          : `${rule.op === ">=" ? "at least" : "at most"} ${fmt(rule.threshold, rule.unit)}`,
+      };
+    });
+    return { borrower, results, recommendation: recommend(results) };
+  }
+
+  function reviewQueue(ev) {
+    return ev.results.slice().sort((a, b) =>
+      STATUS_ORDER[a.status] - STATUS_ORDER[b.status] || parseInt(a.id.slice(1)) - parseInt(b.id.slice(1)));
+  }
+
+  // ---------------- Memo ----------------
+  const TAG_SRC = String.raw`\[(?:R\d+|APP|POLICY)(?:\s*,\s*(?:R\d+|APP|POLICY))*\]`;
+  const tagRe = (flags = "") => new RegExp(TAG_SRC, flags);
+  const numRe = () => /(?<![A-Za-z\d.])\d[\d,]*(?:\.\d+)?/g;
+
+  function memoFacts(ev) {
+    const b = ev.borrower, lr = b.loan_request;
+    return {
+      borrower: b.name, industry: b.industry,
+      "loan_request [APP]": `Rs ${lr.amount_lakh} lakh over ${lr.tenure_months} months at ${lr.annual_rate_pct}%`,
+      "recommendation [POLICY]": ev.recommendation.label,
+      recommendation_meaning: ev.recommendation.explain,
+      rules: ev.results.map((r) => ({ tag: r.id, rule: r.short, result: r.status, value: r.value_display,
+        limit: r.threshold_display, why_not_checked: r.reason })),
+    };
+  }
+
+  function templateMemo(ev) {
+    const b = ev.borrower, rec = ev.recommendation, lr = b.loan_request;
+    const by = (s) => ev.results.filter((r) => r.status === s);
+    const lines = ["### Summary",
+      `${b.name}, a ${b.industry.toLowerCase()} business, has asked for Rs ${lr.amount_lakh} lakh over ${lr.tenure_months} months at ${lr.annual_rate_pct}% [APP].`,
+      `Against the lender's policy, the file is: ${rec.label.toLowerCase()} [POLICY].`,
+      "### Concerns"];
+    const concerns = by("FAIL").filter((r) => r.metric !== "documents_complete")
+      .map((r) => `${r.short} is ${r.value_display}, but the policy needs ${r.threshold_display} [${r.id}].`)
+      .concat(by("BORDERLINE").map((r) => `${r.short} is ${r.value_display}, close to the limit of ${r.threshold_display} [${r.id}].`));
+    lines.push(...(concerns.length ? concerns : ["None [POLICY]."]), "### Missing information");
+    const missing = by("CANT_CHECK").map((r) => `${r.short} could not be checked (${r.reason}) [${r.id}].`)
+      .concat(by("FAIL").filter((r) => r.metric === "documents_complete").map((r) => `${r.reason} [${r.id}].`));
+    lines.push(...(missing.length ? missing : ["None [POLICY]."]), "### Strengths");
+    const strengths = by("PASS").filter((r) => ["dscr", "debt_to_ebitda", "current_ratio", "bureau_score"].includes(r.metric))
+      .map((r) => `${r.short} is ${r.value_display}, comfortably within the limit of ${r.threshold_display} [${r.id}].`);
+    lines.push(...(strengths.length ? strengths : ["None [POLICY]."]));
+    lines.push("### Recommendation", `${rec.label} [POLICY]. ${rec.explain.slice(0, -1)} [POLICY].`);
+    return lines.join("\n");
+  }
+
+  const MEMO_PROMPT = `You are drafting a short credit memo for a human credit reviewer at a lender.
+
+Rules you must follow:
+1. Use ONLY the facts in the JSON below. Do not add, round differently, or invent any number.
+2. Do not change the recommendation. State it exactly as given.
+3. End every sentence with the tags of the facts it relies on, placed before the full stop,
+   like "... below the minimum [R4]." Use [APP] for loan application details and [POLICY]
+   for the overall recommendation.
+4. Plain English that a new analyst can follow. 120 to 200 words.
+5. Use exactly these headings, each on its own line starting with "### ":
+   Summary, Concerns, Missing information, Strengths, Recommendation.
+   If a section has nothing, write "None [POLICY]."
+
+FACTS:
+`;
+
+  function memoPrompt(ev) { return MEMO_PROMPT + JSON.stringify(memoFacts(ev), null, 2); }
+
+  /* The numbers each citation tag is allowed to back up. A sentence tagged [R6]
+   * may only use R6's numbers, so a number that exists elsewhere in the file
+   * (say, the DSCR limit) can't sneak into a sentence about the current ratio. */
+  function numbersByTag(ev, policy) {
+    const tags = {};
+    const adder = (vals) => (v) => {
+      if (typeof v !== "number") return;
+      for (const d of [0, 1, 2]) { vals.push(round(v, d)); vals.push(Number(v.toFixed(d))); }
+    };
+    const fromText = (add, text) => { for (const n of String(text || "").match(numRe()) || []) add(parseFloat(n.replace(/,/g, ""))); };
+    for (const r of ev.results) {
+      const vals = (tags[r.id] = []), add = adder(vals);
+      add(r.value); add(r.threshold); fromText(add, r.reason);
+      r.inputs.forEach((i) => add(i.value));
+      const rule = policy.rules.find((p) => p.id === r.id);
+      if (rule) fromText(add, rule.text);
+    }
+    tags.APP = []; Object.values(ev.borrower.loan_request).forEach(adder(tags.APP));
+    tags.POLICY = []; const addP = adder(tags.POLICY);
+    addP(ev.results.length);
+    for (const s of ["FAIL", "CANT_CHECK", "BORDERLINE", "PASS"]) addP(ev.results.filter((r) => r.status === s).length);
+    return tags;
+  }
+
+  function checkMemo(memo, ev, policy) {
+    const byTag = numbersByTag(ev, policy);
+    const everything = [].concat(...Object.values(byTag));
+    const numbers = [], uncited = [];
+    const body = memo.split("\n").filter((l) => l.trim() && !l.trim().startsWith("#"));
+    for (const line of body) {
+      for (const sentence of line.trim().split(/(?<=[.!?])\s+/)) {
+        if (!sentence) continue;
+        const cited = (sentence.match(tagRe("g")) || []).flatMap((t) => t.slice(1, -1).split(/\s*,\s*/));
+        if (!cited.length) uncited.push(sentence);
+        const allowed = cited.length ? [].concat(...cited.map((t) => byTag[t] || [])) : everything;
+        const plain = sentence.replace(tagRe("g"), "");
+        for (const raw of plain.match(numRe()) || []) {
+          const n = parseFloat(raw.replace(/,/g, "").replace(/\.$/, ""));
+          numbers.push({ number: raw, ok: allowed.some((a) => Math.abs(n - a) < 1e-6), sentence });
+        }
+      }
+    }
+    const recommendationOk = memo.toLowerCase().includes(ev.recommendation.label.toLowerCase());
+    const unmatched = numbers.filter((n) => !n.ok);
+    return { numbers, unmatched, uncited, recommendationOk, passed: !unmatched.length && !uncited.length && recommendationOk };
+  }
+
+  function injectError(memo) {
+    const lines = memo.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      if (lines[i].startsWith("#")) continue;
+      const masked = lines[i].replace(tagRe("g"), (m) => " ".repeat(m.length));
+      const m = /\d+\.\d+/.exec(masked);
+      if (m) {
+        const wrong = (parseFloat(m[0]) + 0.42).toFixed(2);
+        lines[i] = lines[i].slice(0, m.index) + wrong + lines[i].slice(m.index + m[0].length);
+        return { memo: lines.join("\n"), old: m[0], wrong };
+      }
+    }
+    return { memo, old: null, wrong: null };
+  }
+
+  const api = { STATUS_ORDER, STATUS_LABEL, evaluate, reviewQueue, fmt, templateMemo, memoPrompt,
+    checkMemo, injectError, yearlyRepayment };
+  if (typeof module !== "undefined" && module.exports) module.exports = api;
+  else root.CAM = api;
+})(typeof window !== "undefined" ? window : globalThis);
+
+</script>
+<script>
+/* UI for Credit Policy Desk. All decisions come from engine.js (window.CAM). */
+(function () {
+  "use strict";
+  const DATA = window.__DATA__;
+  const ORIGINAL = DATA.policy;
+  const BORROWERS = DATA.borrowers;
+  const WEBLLM_URL = "https://cdn.jsdelivr.net/npm/@mlc-ai/web-llm@0.2.79/+esm";
+  const MODELS = [
+    ["Qwen2.5-0.5B-Instruct-q4f16_1-MLC", "Qwen 2.5 · 0.5B · 290 MB (fastest)"],
+    ["Llama-3.2-1B-Instruct-q4f16_1-MLC", "Llama 3.2 · 1B · 705 MB (balanced)"],
+    ["Qwen2.5-1.5B-Instruct-q4f16_1-MLC", "Qwen 2.5 · 1.5B · 880 MB (best writing)"],
+  ];
+  const ICON = { FAIL: "✕", CANT_CHECK: "?", BORDERLINE: "!", PASS: "✓" };
+  const DECISIONS = ["Not reviewed yet", "Agree with the flag", "Asked borrower for documents",
+    "Override: source data was wrong", "Override: approve as a deviation"];
+  const OUTCOMES = [["WITHIN_POLICY", "Within policy"], ["WITHIN_POLICY_REVIEW", "Borderline items"],
+    ["INCOMPLETE", "Incomplete file"], ["OUTSIDE_POLICY", "Outside policy"]];
+  const STEP = { x: 0.05, "%": 1, years: 0.5, days: 5, "": 1 };
+  const PRESETS = {
+    tight: { R2: 720, R4: 1.4, R5: 3.0, R6: 1.3, R7: 8 },
+    loose: { R2: 680, R4: 1.15, R5: 4.0, R8: 70 },
+  };
+  const GLOSSARY = [
+    ["CAM (Credit Assessment Memo)", "The document that explains why a loan should or shouldn't be approved."],
+    ["Credit policy", "A lender's own rulebook for which loans it will give."],
+    ["Deviation", "Approving a loan that breaks a policy rule. Needs a senior sign-off and a written reason."],
+    ["Rs lakh", "1 lakh = 1,00,000 rupees. All money here is in lakh."],
+    ["EBITDA", "Yearly profit before interest, tax and accounting write-offs: roughly the cash the business makes."],
+    ["DSCR", "EBITDA divided by yearly loan repayments. 1.25 means Rs 1.25 earned for every Rs 1 to repay."],
+    ["Debt to EBITDA", "Total debt divided by EBITDA: about how many years of profit it takes to repay all debt."],
+    ["Current ratio", "Short-term assets divided by short-term liabilities. Below 1 means bills due soon exceed cash coming soon."],
+    ["GST returns", "Sales the business reports to the tax department. A cross-check on audited revenue."],
+    ["Bureau score", "Credit score from a credit bureau, based on past repayment behaviour."],
+    ["DPD (days past due)", "How many days late a repayment was."],
+    ["EMI / bounce", "A fixed monthly loan payment. A bounce is a payment that failed for lack of funds."],
+  ];
+
+  const clone = (o) => JSON.parse(JSON.stringify(o));
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+  let policy = clone(ORIGINAL);
+  let current = BORROWERS[0].id;
+  let writer = "template";
+  const decisions = {};
+  const aiMemos = {};
+  let llm = null, llmModel = null, busy = false;
+
+  const byId = (id) => BORROWERS.find((b) => b.id === id);
+  const evalAll = (p) => BORROWERS.map((b) => CAM.evaluate(b, p));
+  const BASE = evalAll(ORIGINAL);
+  const policyKey = () => JSON.stringify(policy.rules.map((r) => r.threshold).concat(policy.borderline_margin_pct));
+  const policyEdited = () => policyKey() !== JSON.stringify(ORIGINAL.rules.map((r) => r.threshold).concat(ORIGINAL.borderline_margin_pct));
+  const outcomeBadge = (rec) => `<span class="badge o-${rec.code}">${esc(rec.label)}</span>`;
+  const label = (b) => `${b.id} · ${b.name} · ${b.industry}`;
+
+  // ---------------- Tabs ----------------
+  function showTab(name) {
+    document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === name));
+    document.querySelectorAll("section.panel").forEach((s) => s.classList.toggle("active", s.id === `tab-${name}`));
+    if (name === "review") renderReview();
+    if (name === "memo") renderMemo();
+    if (name === "about") renderAbout();
+  }
+  document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+
+  // ---------------- 1. Policy what-if ----------------
+  function renderPolicyRows() {
+    $("policy-rows").innerHTML = policy.rules.map((r, i) => {
+      if (r.op === "==") return `<div class="rule-row"><label title="${esc(r.text)}"><span class="rid">${r.id}</span>${esc(r.short)}</label><span class="muted" style="font-size:13px">all required</span></div>`;
+      const sym = r.op === ">=" ? "≥" : "≤";
+      return `<div class="rule-row" id="row-${r.id}"><label for="th-${r.id}" title="${esc(r.text)}"><span class="rid">${r.id}</span>${esc(r.short)} <span class="op">${sym}${r.unit && r.unit !== "x" ? " " + esc(r.unit) : ""}</span></label>
+        <input type="number" id="th-${r.id}" data-i="${i}" step="${STEP[r.unit] ?? 1}" value="${r.threshold}"></div>`;
+    }).join("");
+    $("margin").value = policy.borderline_margin_pct;
+    $("policy-rows").querySelectorAll("input").forEach((inp) => inp.addEventListener("input", () => {
+      const v = parseFloat(inp.value);
+      if (!Number.isFinite(v)) return;
+      policy.rules[+inp.dataset.i].threshold = v;
+      renderPortfolio();
+    }));
+    markEdited();
+  }
+  $("margin").addEventListener("input", () => {
+    const v = parseFloat($("margin").value);
+    if (!Number.isFinite(v) || v < 0) return;
+    policy.borderline_margin_pct = v;
+    renderPortfolio();
+  });
+  document.querySelectorAll("[data-preset]").forEach((btn) => btn.addEventListener("click", () => {
+    policy = clone(ORIGINAL);
+    const p = PRESETS[btn.dataset.preset];
+    if (p) policy.rules.forEach((r) => { if (r.id in p) r.threshold = p[r.id]; });
+    renderPolicyRows();
+    renderPortfolio();
+  }));
+  function markEdited() {
+    policy.rules.forEach((r, i) => {
+      const row = $(`row-${r.id}`);
+      if (row) row.classList.toggle("changed", r.threshold !== ORIGINAL.rules[i].threshold);
+    });
+  }
+
+  function renderPortfolio() {
+    markEdited();
+    const evs = evalAll(policy);
+    const count = (list, code) => list.filter((e) => e.recommendation.code === code).length;
+    $("chips").innerHTML = OUTCOMES.map(([code, name]) => {
+      const n = count(evs, code), d = n - count(BASE, code);
+      const bad = code === "OUTSIDE_POLICY" || code === "INCOMPLETE";
+      const cls = d === 0 ? "" : (d > 0) === bad ? "up" : "down";
+      return `<div class="chip"><div class="n">${n}${d ? `<span class="d ${cls}">${d > 0 ? "+" : ""}${d}</span>` : ""}</div><div class="l"><span class="badge o-${code}">${name}</span></div></div>`;
+    }).join("");
+
+    const head = `<thead><tr><th>Loan file</th>${policy.rules.map((r) => `<th class="c" title="${esc(r.short)}">${r.id}</th>`).join("")}<th>Outcome</th></tr></thead>`;
+    const rows = evs.map((ev, i) => {
+      const b = ev.borrower, moved = ev.recommendation.code !== BASE[i].recommendation.code;
+      const cells = ev.results.map((r) => `<td class="c"><span class="cell s-${r.status}" title="${esc(r.short)}: ${esc(CAM.STATUS_LABEL[r.status])} (${esc(r.value_display)})">${ICON[r.status]}</span></td>`).join("");
+      return `<tr data-id="${b.id}" class="${moved ? "moved" : ""}"><td><b>${b.id}</b> <span class="muted">${esc(b.industry)}</span></td>${cells}
+        <td>${outcomeBadge(ev.recommendation)}${moved ? `<span class="was">was: ${esc(BASE[i].recommendation.label)}</span>` : ""}</td></tr>`;
+    }).join("");
+    $("port").innerHTML = head + `<tbody>${rows}</tbody>`;
+    $("port").querySelectorAll("tbody tr").forEach((tr) => tr.addEventListener("click", () => {
+      current = tr.dataset.id;
+      showTab("review");
+      document.querySelector("nav.tabs").scrollIntoView({ behavior: "smooth" });
+    }));
+
+    const changes = [];
+    evs.forEach((ev, i) => {
+      const before = BASE[i];
+      const ruleMoves = ev.results.filter((r, j) => r.status !== before.results[j].status)
+        .map((r, _, arr) => `${r.id} ${esc(r.short)}: ${esc(r.value_display)} vs ${esc(r.threshold_display)}`);
+      if (ev.recommendation.code !== before.recommendation.code)
+        changes.push(`<li><b>${ev.borrower.id}</b> ${esc(before.recommendation.label)} → <b>${esc(ev.recommendation.label)}</b><br><small>${ruleMoves.join(" · ")}</small></li>`);
+    });
+    $("changes").innerHTML = !policyEdited() ? `<p class="muted" style="margin:0">This is the original policy. Try <b>Downturn: tighten</b> to see which files would no longer qualify.</p>`
+      : changes.length ? `<ul class="changes" style="padding-left:18px;margin:0">${changes.join("")}</ul>`
+      : `<p class="muted" style="margin:0">Policy edited, but no file changed its outcome.</p>`;
+  }
+
+  // ---------------- 2. Review a file ----------------
+  function fillBorrowerSelect(sel) {
+    sel.innerHTML = BORROWERS.map((b) => `<option value="${b.id}">${esc(label(b))}</option>`).join("");
+    sel.value = current;
+  }
+  $("borrower").addEventListener("change", (e) => { current = e.target.value; renderReview(); });
+
+  function renderReview() {
+    fillBorrowerSelect($("borrower"));
+    const b = byId(current), ev = CAM.evaluate(b, policy), q = CAM.reviewQueue(ev), lr = b.loan_request;
+    $("policy-note").innerHTML = policyEdited() ? `<div class="note">You are reviewing against your <b>edited</b> policy from tab 1.</div>` : "";
+    const n = (s) => q.filter((r) => r.status === s).length;
+    $("file-meta").innerHTML = `<div class="row" style="justify-content:space-between">
+      <div><h2>${esc(b.name)} <small style="font-weight:400">· ${esc(b.industry)}</small></h2>
+      <small>Asks for Rs ${lr.amount_lakh} lakh over ${lr.tenure_months} months at ${lr.annual_rate_pct}%</small></div>
+      <div class="counts">${outcomeBadge(ev.recommendation)}
+      <span class="badge s-FAIL">${n("FAIL")} fail</span><span class="badge s-CANT_CHECK">${n("CANT_CHECK")} can't check</span>
+      <span class="badge s-BORDERLINE">${n("BORDERLINE")} borderline</span></div></div>
+      <p style="margin:8px 0 0;font-size:13.5px" class="muted">${esc(ev.recommendation.explain)}</p>`;
+    $("planted").textContent = b.planted_problem;
+
+    const flagged = q.filter((r) => r.status !== "PASS");
+    const html = (flagged.length ? "" : `<div class="ok" style="margin-top:10px">Nothing to check first: every rule passes comfortably.</div>`)
+      + q.map((r) => ruleCard(r, r.status !== "PASS")).join("");
+    $("queue").innerHTML = html;
+    $("queue").querySelectorAll("[data-key]").forEach(wireDecision);
+    renderAudit();
+  }
+
+  const edited = (r) => ORIGINAL.rules.find((o) => o.id === r.id).threshold !== r.threshold;
+
+  function ruleCard(r, open) {
+    const key = `${current}:${r.id}`;
+    const d = decisions[key] || { decision: DECISIONS[0], reason: "" };
+    const inputs = r.inputs.length ? `<div class="table-wrap"><table><thead><tr><th>Input</th><th>Value</th><th>Where it came from</th></tr></thead><tbody>${
+      r.inputs.map((i) => `<tr><td>${esc(i.label)}</td><td>${esc(typeof i.value === "number" ? CAM.fmt(i.value, i.unit) : i.value)}</td><td>${esc(i.source)}</td></tr>`).join("")}</tbody></table></div>` : "";
+    const decide = r.status === "PASS" ? "" : `<div class="decide" data-key="${key}">
+      <div><label>Reviewer decision</label><select>${DECISIONS.map((x) => `<option ${x === d.decision ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
+      <div><label>Reason (needed for any override)</label><input type="text" value="${esc(d.reason)}" placeholder="e.g. Promoter brought in Rs 40 lakh fresh equity"></div>
+      <div class="err" hidden style="grid-column:1/-1">An override needs a written reason. It goes into the audit log.</div></div>`;
+    return `<details class="rule" ${open ? "open" : ""}><summary><span class="cell s-${r.status}">${ICON[r.status]}</span>
+      <span class="title">${r.id} · ${esc(r.short)}</span><span class="badge s-${r.status}">${esc(CAM.STATUS_LABEL[r.status])}</span>
+      <span class="val">${esc(r.value_display)} · policy: ${esc(r.threshold_display)}</span></summary>
+      <div class="body"><p><b>Rule:</b> ${esc(r.text)}${edited(r) ? ` <span class="badge" style="background:var(--accent-soft);color:var(--accent)">Edited in tab 1: now ${esc(r.threshold_display)}</span>` : ""}</p>${r.reason ? `<div class="warn">${esc(r.reason)}</div>` : ""}
+      ${inputs}${r.how ? `<p><b>Calculation:</b> <code>${esc(r.how)}</code> = <b>${esc(r.value_display)}</b></p>` : ""}${decide}</div></details>`;
+  }
+
+  function wireDecision(box) {
+    const key = box.dataset.key, sel = box.querySelector("select"), txt = box.querySelector("input"), err = box.querySelector(".err");
+    const update = () => {
+      decisions[key] = { decision: sel.value, reason: txt.value };
+      err.hidden = !(sel.value.startsWith("Override") && !txt.value.trim());
+      renderAudit();
+    };
+    sel.addEventListener("change", update);
+    txt.addEventListener("input", update);
+    update();
+  }
+
+  function auditRows() {
+    return Object.entries(decisions).filter(([, v]) => v.decision !== DECISIONS[0])
+      .map(([k, v]) => ({ file: k.split(":")[0], rule: k.split(":")[1], ...v }));
+  }
+  function renderAudit() {
+    const rows = auditRows();
+    $("audit").innerHTML = rows.length ? `<div class="table-wrap"><table><thead><tr><th>File</th><th>Rule</th><th>Decision</th><th>Reason</th></tr></thead><tbody>${
+      rows.map((r) => `<tr><td>${r.file}</td><td>${r.rule}</td><td>${esc(r.decision)}</td><td>${r.reason ? esc(r.reason) : (r.decision.startsWith("Override") ? '<span style="color:var(--fail)">missing</span>' : "")}</td></tr>`).join("")}</tbody></table></div>
+      <div class="btns"><button class="btn" id="dl-audit">Download audit log (CSV)</button></div>`
+      : `<p class="muted" style="margin:0">No decisions recorded yet. Every decision and its reason lands here.</p>`;
+    const dl = $("dl-audit");
+    if (dl) dl.addEventListener("click", () => {
+      const q = (s) => `"${String(s).replace(/"/g, '""')}"`;
+      const csv = ["File,Rule,Decision,Reason", ...rows.map((r) => [r.file, r.rule, r.decision, r.reason].map(q).join(","))].join("\n");
+      const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: "audit_log.csv" });
+      a.click();
+    });
+  }
+
+  // ---------------- 3. Memo ----------------
+  $("model").innerHTML = MODELS.map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join("");
+  $("memo-borrower").addEventListener("change", (e) => { current = e.target.value; renderMemo(); });
+  document.querySelectorAll("[data-writer]").forEach((btn) => btn.addEventListener("click", () => {
+    writer = btn.dataset.writer;
+    document.querySelectorAll("[data-writer]").forEach((b) => b.setAttribute("aria-pressed", b === btn));
+    renderMemo();
+  }));
+  $("plant").addEventListener("change", () => renderMemoOutput());
+  $("load-model").addEventListener("click", () => ensureModel().catch(showAiError));
+  $("write-ai").addEventListener("click", () => writeAiMemo(current).catch(showAiError));
+  $("model").addEventListener("change", () => { $("write-ai").disabled = !(llm && llmModel === $("model").value); });
+
+  const memoKey = (id) => `${id}|${llmModel}|${policyKey()}`;
+
+  function renderMemo() {
+    fillBorrowerSelect($("memo-borrower"));
+    $("ai-box").hidden = writer !== "ai";
+    if (writer === "ai" && !navigator.gpu) {
+      $("ai-status").innerHTML = "This browser doesn't support WebGPU, so the model can't run here. Try recent Chrome or Edge on a desktop. The template memo and all checks still work.";
+      $("load-model").disabled = true;
+    } else if (writer === "ai" && !llm) {
+      $("ai-status").textContent = "The model downloads once, then stays cached in this browser for next time. Your data is never sent to a server.";
+    }
+    renderMemoOutput();
+  }
+
+  function currentMemoText() {
+    if (writer === "template") return CAM.templateMemo(CAM.evaluate(byId(current), policy));
+    return aiMemos[memoKey(current)] || "";
+  }
+
+  function renderMemoMarkdown(text, bad, streaming) {
+    let html = text.split("\n").filter((l) => l.trim()).map((line) => {
+      let s = esc(line.trim());
+      s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
+      for (const n of bad) {
+        const re = new RegExp(`(?<![\\d.,])${n.replace(/[.,]/g, (c) => "\\" + c)}(?![\\d])`);
+        s = s.replace(re, `<mark class="bad">${n}</mark>`);
+      }
+      s = s.replace(/\[((?:R\d+|APP|POLICY)(?:\s*,\s*(?:R\d+|APP|POLICY))*)\]/g, '<span class="tag">$1</span>');
+      return /^#{1,6}\s/.test(line.trim()) ? `<h4>${s.replace(/^#{1,6}\s*/, "")}</h4>` : `<p>${s}</p>`;
+    }).join("");
+    if (streaming) html += '<span class="cursor"></span>';
+    return html;
+  }
+
+  function renderMemoOutput(streaming = false) {
+    const ev = CAM.evaluate(byId(current), policy);
+    let text = currentMemoText();
+    let plantNote = "";
+    if (!text) {
+      $("memo-text").innerHTML = `<p class="muted">${llm ? "Click <b>Write memo</b> to let the on-device model draft it." : "Load a model, then click <b>Write memo</b>."}</p>`;
+      $("memo-checks").innerHTML = `<p class="muted">Checks run as soon as there is a memo.</p>`;
+      return;
+    }
+    if ($("plant").checked && !streaming) {
+      const r = CAM.injectError(text);
+      text = r.memo;
+      if (r.old) plantNote = `<p class="muted" style="font-size:13px">Planted: changed <b>${esc(r.old)}</b> to <b>${esc(r.wrong)}</b>.</p>`;
+    }
+    const c = CAM.checkMemo(text, ev, policy);
+    $("memo-text").innerHTML = renderMemoMarkdown(text, c.unmatched.map((n) => n.number), streaming);
+    if (streaming) { $("memo-checks").innerHTML = `<p class="muted">Waiting for the model to finish…</p>`; return; }
+    const okN = c.numbers.filter((n) => n.ok).length;
+    $("memo-checks").innerHTML = plantNote + `
+      <div class="check-line"><span class="ic">${c.unmatched.length ? "❌" : "✅"}</span><div><b>Numbers:</b> ${okN} of ${c.numbers.length} match the calculated facts
+        ${c.unmatched.map((n) => `<div class="err"><b>${esc(n.number)}</b> is not in the facts.<br><small>${esc(n.sentence)}</small></div>`).join("")}</div></div>
+      <div class="check-line"><span class="ic">${c.uncited.length ? "❌" : "✅"}</span><div><b>Sources:</b> ${c.uncited.length ? `${c.uncited.length} sentence(s) cite no rule` : "every sentence cites a rule"}
+        ${c.uncited.map((s) => `<div class="warn">${esc(s)}</div>`).join("")}</div></div>
+      <div class="check-line"><span class="ic">${c.recommendationOk ? "✅" : "❌"}</span><div><b>Outcome</b> ${c.recommendationOk ? "matches" : "does not match"} the rule engine ("${esc(ev.recommendation.label)}")</div></div>
+      ${c.passed ? `<div class="ok">Memo passed every check. It can go to the reviewer.</div>` : `<div class="err">Memo blocked. Fix the flagged items before it reaches the reviewer.</div>`}`;
+  }
+
+  // ---------------- On-device AI (WebLLM) ----------------
+  function setProgress(frac, text) {
+    $("progress").hidden = false;
+    $("progress").firstElementChild.style.width = `${Math.round(frac * 100)}%`;
+    $("ai-status").textContent = text;
+  }
+  function showAiError(e) {
+    busy = false;
+    $("load-model").disabled = false;
+    $("ai-status").innerHTML = `<span style="color:var(--fail)">${esc(e.message || e)}</span>`;
+  }
+
+  async function ensureModel() {
+    const id = $("model").value;
+    if (llm && llmModel === id) return;
+    if (!navigator.gpu) throw new Error("This browser doesn't support WebGPU. Try recent Chrome or Edge on a desktop.");
+    $("load-model").disabled = true; $("write-ai").disabled = true;
+    setProgress(0, "Loading the WebLLM library…");
+    const webllm = await import(WEBLLM_URL);
+    if (llm) { await llm.unload(); llm = null; }
+    llm = await webllm.CreateMLCEngine(id, { initProgressCallback: (r) => setProgress(r.progress || 0, r.text || "") });
+    llmModel = id;
+    setProgress(1, `Ready: ${MODELS.find((m) => m[0] === id)[1]} is running on this device.`);
+    $("load-model").disabled = false; $("write-ai").disabled = false;
+    renderMemoOutput();
+  }
+
+  async function generateMemo(id, onToken) {
+    const ev = CAM.evaluate(byId(id), policy);
+    const stream = await llm.chat.completions.create({
+      messages: [{ role: "user", content: CAM.memoPrompt(ev) }],
+      temperature: 0.2, max_tokens: 600, stream: true,
+    });
+    let text = "";
+    for await (const chunk of stream) {
+      text += (chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content) || "";
+      if (onToken) onToken(text);
+    }
+    return text.trim();
+  }
+
+  async function writeAiMemo(id) {
+    if (busy) return;
+    await ensureModel();
+    busy = true; $("write-ai").disabled = true;
+    $("ai-status").textContent = "Writing on this device…";
+    const key = memoKey(id);
+    aiMemos[key] = await generateMemo(id, (t) => { aiMemos[key] = t; if (current === id) renderMemoOutput(true); });
+    busy = false; $("write-ai").disabled = false;
+    $("ai-status").textContent = "Done. The checks on the right ran on the model's output.";
+    renderMemoOutput();
+  }
+
+  // ---------------- 4. How well it works ----------------
+  function renderAbout() {
+    let match = 0, total = 0;
+    const rows = BASE.map((ev) => {
+      const b = ev.borrower;
+      ev.results.forEach((r) => { total++; if (b.expected[r.id] === r.status) match++; });
+      const flagged = CAM.reviewQueue(ev).filter((r) => r.status !== "PASS").map((r) => `${r.id} ${CAM.STATUS_LABEL[r.status].toLowerCase()}`);
+      return `<tr><td><b>${b.id}</b></td><td>${esc(b.planted_problem)}</td><td>${esc(flagged.join(", ") || "-")}</td></tr>`;
+    }).join("");
+    $("eval-rules").innerHTML = `<p style="margin-top:0"><b>${match} of ${total}</b> rule results match answers I wrote by hand (12 files × 10 rules, original policy).
+      I wrote both the rules and the test files, so this mostly proves the engine does what I intended. Real files are messier.</p>
+      <div class="table-wrap"><table><thead><tr><th>File</th><th>Planted problem</th><th>Flagged</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+    $("glossary").innerHTML = GLOSSARY.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("");
+  }
+
+  $("run-ai-test").addEventListener("click", async () => {
+    const btn = $("run-ai-test");
+    try {
+      if (!navigator.gpu) throw new Error("This browser doesn't support WebGPU. Try recent Chrome or Edge on a desktop.");
+      if (busy) return;
+      btn.disabled = true;
+      $("ai-test-status").textContent = "Loading model (see tab 3 for progress)…";
+      writer = "ai";
+      document.querySelectorAll("[data-writer]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.writer === "ai"));
+      $("ai-box").hidden = false;
+      await ensureModel();
+      busy = true;
+      const results = [];
+      for (const b of BORROWERS) {
+        $("ai-test-status").textContent = `Writing memo ${results.length + 1} of ${BORROWERS.length}…`;
+        const text = await generateMemo(b.id);
+        aiMemos[memoKey(b.id)] = text;
+        const ev = CAM.evaluate(b, policy);
+        results.push({ id: b.id, c: CAM.checkMemo(text, ev, policy) });
+        renderAiTest(results);
+      }
+      $("ai-test-status").textContent = `Done with ${MODELS.find((m) => m[0] === llmModel)[1]}. Open any memo in tab 3 to see it.`;
+    } catch (e) {
+      $("ai-test-status").innerHTML = `<span style="color:var(--fail)">${esc(e.message || e)}</span>`;
+    } finally {
+      busy = false; btn.disabled = false;
+    }
+  });
+
+  function renderAiTest(results) {
+    const passed = results.filter((r) => r.c.passed).length;
+    const nums = results.reduce((s, r) => s + r.c.numbers.length, 0);
+    const bad = results.reduce((s, r) => s + r.c.unmatched.length, 0);
+    const unc = results.reduce((s, r) => s + r.c.uncited.length, 0);
+    const recBad = results.filter((r) => !r.c.recommendationOk).length;
+    $("ai-test").innerHTML = `<div class="chips" style="grid-template-columns:repeat(3,1fr)">
+      <div class="chip"><div class="n">${passed}/${results.length}</div><div class="l">memos passed every check</div></div>
+      <div class="chip"><div class="n">${bad}</div><div class="l">wrong numbers blocked (of ${nums})</div></div>
+      <div class="chip"><div class="n">${unc}</div><div class="l">sentences with no source</div></div></div>
+      ${recBad ? `<p class="err">${recBad} memo(s) changed the outcome and were blocked.</p>` : ""}
+      <div class="table-wrap"><table><thead><tr><th>File</th><th>Result</th><th>What the checks caught</th></tr></thead><tbody>${
+        results.map((r) => {
+          const issues = [];
+          if (r.c.unmatched.length) issues.push(`wrong numbers: ${r.c.unmatched.map((n) => n.number).join(", ")}`);
+          if (r.c.uncited.length) issues.push(`${r.c.uncited.length} uncited sentence(s)`);
+          if (!r.c.recommendationOk) issues.push("outcome changed");
+          return `<tr><td>${r.id}</td><td>${r.c.passed ? '<span class="badge s-PASS">Passed</span>' : '<span class="badge s-FAIL">Blocked</span>'}</td><td>${esc(issues.join(" · ") || "-")}</td></tr>`;
+        }).join("")}</tbody></table></div>`;
+  }
+
+  // ---------------- Start ----------------
+  renderPolicyRows();
+  renderPortfolio();
+  renderAbout();
+})();
+
+</script>
+</body>
+</html>

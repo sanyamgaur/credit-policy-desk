@@ -1,0 +1,82 @@
+{
+  "id": "B08",
+  "name": "Borrower H",
+  "industry": "Printing",
+  "synthetic": true,
+  "planted_problem": "Young business with only one audited year.",
+  "application_date": "2026-11-10",
+  "loan_request": {
+    "amount_lakh": 60,
+    "tenure_months": 36,
+    "annual_rate_pct": 15
+  },
+  "documents": {
+    "kyc": {
+      "present": true,
+      "incorporation_date": "2024-08-01",
+      "pages": {
+        "incorporation_date": 1
+      }
+    },
+    "bureau": {
+      "present": true,
+      "promoter_score": 742,
+      "max_dpd_12m": 0,
+      "pages": {
+        "promoter_score": 1,
+        "max_dpd_12m": 3
+      }
+    },
+    "financials_fy26": {
+      "present": true,
+      "revenue": 420,
+      "ebitda": 55,
+      "existing_annual_debt_service": 10,
+      "existing_debt": 30,
+      "current_assets": 150,
+      "current_liabilities": 110,
+      "pages": {
+        "revenue": 4,
+        "ebitda": 5,
+        "existing_annual_debt_service": 14,
+        "existing_debt": 9,
+        "current_assets": 3,
+        "current_liabilities": 3
+      }
+    },
+    "financials_fy25": {
+      "present": false
+    },
+    "gst_fy26": {
+      "present": true,
+      "months_filed": 12,
+      "turnover": 410,
+      "pages": {
+        "turnover": 1,
+        "months_filed": 1
+      }
+    },
+    "bank_fy26": {
+      "present": true,
+      "months": 12,
+      "total_credits": 370,
+      "bounces_6m": 0,
+      "pages": {
+        "total_credits": 2,
+        "bounces_6m": 9
+      }
+    }
+  },
+  "expected": {
+    "R1": "FAIL",
+    "R2": "PASS",
+    "R3": "PASS",
+    "R4": "PASS",
+    "R5": "PASS",
+    "R6": "PASS",
+    "R7": "PASS",
+    "R8": "PASS",
+    "R9": "PASS",
+    "R10": "FAIL"
+  }
+}
