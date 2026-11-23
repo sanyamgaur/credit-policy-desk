@@ -101,8 +101,15 @@ memo recommending approval for a loan outside policy.
 
 The fix has two parts:
 
-1. **The AI never types a number.** It writes placeholders like `{R4.value}`, and code fills in
-   the exact figure. Number errors become impossible rather than merely detected.
+1. **The AI never types a number.** Code writes an outline of the memo with placeholders like
+   `{R4.value}`, and the AI only rewords it in plainer English. Code fills the exact figures
+   back in. Number errors become impossible rather than merely detected.
+
+   *Why an outline:* my first version asked the small on-device model (0.5B) to write the whole
+   memo from the facts. It ignored the format and wrote a generic paragraph with no figures, no
+   sources and no outcome; the checker blocked it. Rewording a code-written outline is a much
+   smaller job that small models can do. If a draft is still blocked, it gets up to 3 tries,
+   and the page reports how many tries each memo needed.
 2. **Code checks what's left:** each figure must be an exact figure of the rule its sentence
    cites; words like "passes" or "fails" must match that rule's real result; the memo may not
    recommend a different decision from the rule engine; amounts in crore are converted to lakh.

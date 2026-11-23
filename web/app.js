@@ -326,30 +326,55 @@
     renderMemoOutput();
   }
 
-  async function generateMemo(id, onToken) {
+  const MAX_TRIES = 3;
+  const TEMPERATURES = [0.2, 0.5, 0.8];  // a small model's later tries are more varied
+
+  // The model rewords the code's outline. Code then fills every figure back in.
+  async function generateMemo(id, temperature, onToken) {
     const ev = CAM.evaluate(byId(id), policy);
     const stream = await llm.chat.completions.create({
       messages: [{ role: "user", content: CAM.memoPrompt(ev) }],
-      temperature: 0.2, max_tokens: 600, stream: true,
+      temperature, max_tokens: 700, stream: true,
     });
-    // The model writes placeholders like {R4.value}; code fills in every figure.
     let draft = "";
     for await (const chunk of stream) {
       draft += (chunk.choices[0] && chunk.choices[0].delta && chunk.choices[0].delta.content) || "";
-      if (onToken) onToken(CAM.fillPlaceholders(draft, ev));
+      if (onToken) onToken(CAM.fillPlaceholders(CAM.cleanDraft(draft), ev));
     }
-    return CAM.fillPlaceholders(draft.trim(), ev);
+    return CAM.fillPlaceholders(CAM.cleanDraft(draft), ev);
+  }
+
+  /* Write, check, and try again if the checks block it (up to MAX_TRIES).
+   * If every try is blocked, the last one is kept so the reviewer can see why. */
+  async function writeChecked(id, onStatus, onToken) {
+    const ev = CAM.evaluate(byId(id), policy);
+    let text = "", check = null, tries = 0;
+    while (tries < MAX_TRIES) {
+      tries++;
+      if (onStatus) onStatus(tries);
+      text = await generateMemo(id, TEMPERATURES[tries - 1], onToken);
+      check = CAM.checkMemo(text, ev, policy);
+      if (check.passed) break;
+    }
+    return { text, check, tries };
   }
 
   async function writeAiMemo(id) {
     if (busy) return;
     await ensureModel();
     busy = true; $("write-ai").disabled = true;
-    $("ai-status").textContent = "Writing on this device…";
     const key = memoKey(id);
-    aiMemos[key] = await generateMemo(id, (t) => { aiMemos[key] = t; if (current === id) renderMemoOutput(true); });
-    busy = false; $("write-ai").disabled = false;
-    $("ai-status").textContent = "Done. The checks on the right ran on the model's output.";
+    try {
+      const r = await writeChecked(id,
+        (n) => { $("ai-status").textContent = n === 1 ? "Writing on this device…" : `Try ${n} of ${MAX_TRIES}: the last draft was blocked by the checks, writing again…`; },
+        (t) => { aiMemos[key] = t; if (current === id) renderMemoOutput(true); });
+      aiMemos[key] = r.text;
+      $("ai-status").textContent = r.check.passed
+        ? `Passed every check${r.tries > 1 ? ` on try ${r.tries} of ${MAX_TRIES}` : " on the first try"}.`
+        : `All ${MAX_TRIES} tries were blocked by the checks. The last draft is shown so you can see why. Switch to the template memo, or try again.`;
+    } finally {
+      busy = false; $("write-ai").disabled = false;
+    }
     renderMemoOutput();
   }
 
@@ -382,11 +407,10 @@
       busy = true;
       const results = [];
       for (const b of BORROWERS) {
-        $("ai-test-status").textContent = `Writing memo ${results.length + 1} of ${BORROWERS.length}…`;
-        const text = await generateMemo(b.id);
-        aiMemos[memoKey(b.id)] = text;
-        const ev = CAM.evaluate(b, policy);
-        results.push({ id: b.id, c: CAM.checkMemo(text, ev, policy) });
+        const n = results.length + 1;
+        const r = await writeChecked(b.id, (t) => { $("ai-test-status").textContent = `Writing memo ${n} of ${BORROWERS.length}${t > 1 ? ` (try ${t})` : ""}…`; });
+        aiMemos[memoKey(b.id)] = r.text;
+        results.push({ id: b.id, c: r.check, tries: r.tries });
         renderAiTest(results);
       }
       $("ai-test-status").textContent = `Done with ${MODELS.find((m) => m[0] === llmModel)[1]}. Open any memo in tab 3 to see it.`;
@@ -403,12 +427,14 @@
     const bad = results.reduce((s, r) => s + r.c.unmatched.length, 0);
     const unc = results.reduce((s, r) => s + r.c.uncited.length, 0);
     const recBad = results.filter((r) => !r.c.recommendationOk || r.c.contradictions.length).length;
-    $("ai-test").innerHTML = `<div class="chips" style="grid-template-columns:repeat(3,1fr)">
-      <div class="chip"><div class="n">${passed}/${results.length}</div><div class="l">memos passed every check</div></div>
-      <div class="chip"><div class="n">${bad}</div><div class="l">wrong numbers blocked (of ${nums})</div></div>
-      <div class="chip"><div class="n">${unc}</div><div class="l">sentences with no source</div></div></div>
+    const first = results.filter((r) => r.c.passed && r.tries === 1).length;
+    $("ai-test").innerHTML = `<div class="chips" style="grid-template-columns:repeat(2,1fr)">
+      <div class="chip"><div class="n">${passed}/${results.length}</div><div class="l">memos passed every check (within ${MAX_TRIES} tries)</div></div>
+      <div class="chip"><div class="n">${first}/${results.length}</div><div class="l">passed on the first try</div></div>
+      <div class="chip"><div class="n">${bad}</div><div class="l">wrong numbers in the final drafts (of ${nums})</div></div>
+      <div class="chip"><div class="n">${unc}</div><div class="l">sentences with no source in the final drafts</div></div></div>
       ${recBad ? `<p class="err">${recBad} memo(s) misstated a rule result or the outcome, and were blocked.</p>` : ""}
-      <div class="table-wrap"><table><thead><tr><th>File</th><th>Result</th><th>What the checks caught</th></tr></thead><tbody>${
+      <div class="table-wrap"><table><thead><tr><th>File</th><th>Result</th><th>Tries</th><th>What the checks caught in the last draft</th></tr></thead><tbody>${
         results.map((r) => {
           const issues = [];
           if (r.c.unmatched.length) issues.push(`wrong numbers: ${r.c.unmatched.map((n) => n.number).join(", ")}`);
@@ -416,7 +442,7 @@
           if (r.c.contradictions.length) issues.push(`${r.c.contradictions.length} sentence(s) contradict a rule`);
           if (r.c.placeholders.length) issues.push(`unfilled ${r.c.placeholders.join(", ")}`);
           if (!r.c.recommendationOk) issues.push("outcome changed");
-          return `<tr><td>${r.id}</td><td>${r.c.passed ? '<span class="badge s-PASS">Passed</span>' : '<span class="badge s-FAIL">Blocked</span>'}</td><td>${esc(issues.join(" · ") || "-")}</td></tr>`;
+          return `<tr><td>${r.id}</td><td>${r.c.passed ? '<span class="badge s-PASS">Passed</span>' : '<span class="badge s-FAIL">Blocked</span>'}</td><td>${r.tries}</td><td>${esc(issues.join(" · ") || "-")}</td></tr>`;
         }).join("")}</tbody></table></div>`;
   }
 

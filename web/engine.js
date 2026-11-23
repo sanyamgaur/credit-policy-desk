@@ -214,13 +214,16 @@
   const APPROVE = /\b(recommend(s|ed)? (approv\w*|sanction\w*)|approve the loan|should be approved|can be approved|sanction the loan)\b/i;
   const DECLINE = /\b(declin\w*|reject\w*)\b/i;
 
-  /* Placeholders the AI writes instead of numbers. Code fills them in, so the AI
-   * never types a figure itself. */
+  /* How the AI is used: code writes an OUTLINE of the memo (it decides which rule goes
+   * under Concerns, Missing or Strengths) with placeholders instead of figures. The AI
+   * may only reword the outline in plainer English. Code then fills every figure back in
+   * and checks the result, so the AI never types a number and never makes a decision. */
   function memoSlots(ev) {
     const lr = ev.borrower.loan_request;
     const slots = {
       "APP.amount": `Rs ${lr.amount_lakh} lakh`, "APP.tenure": `${lr.tenure_months} months`,
       "APP.rate": `${lr.annual_rate_pct}%`, OUTCOME: ev.recommendation.label,
+      "OUTCOME.lower": ev.recommendation.label.toLowerCase(),
     };
     for (const r of ev.results) {
       slots[`${r.id}.value`] = r.value_display;
@@ -235,58 +238,60 @@
     return draft.replace(/\{([A-Z0-9]+\.[a-z]+|OUTCOME)\}/g, (m, key) => (key in slots ? slots[key] : m));
   }
 
-  function memoFacts(ev) {
-    const b = ev.borrower;
-    return {
-      borrower: b.name, industry: b.industry,
-      loan_request_tag_APP: "{APP.amount} over {APP.tenure} at {APP.rate}",
-      outcome_tag_POLICY: "{OUTCOME}",
-      outcome_meaning: ev.recommendation.explain,
-      rules: ev.results.map((r) => ({ tag: r.id, rule: r.short, result: r.status,
-        value: `{${r.id}.value}`, limit: `{${r.id}.limit}`, why_not_checked: r.reason ? `{${r.id}.reason}` : null })),
-    };
-  }
-
-  function templateMemo(ev) {
+  /* ph = true gives the outline (placeholders); ph = false gives the finished template memo.
+   * Filling an outline's placeholders must give back exactly the template memo (tested). */
+  function buildMemo(ev, ph) {
     const b = ev.borrower, rec = ev.recommendation, lr = b.loan_request;
     const by = (s) => ev.results.filter((r) => r.status === s);
+    const val = (r) => (ph ? `{${r.id}.value}` : r.value_display);
+    const lim = (r) => (ph ? `{${r.id}.limit}` : r.threshold_display);
+    const why = (r) => (ph ? `{${r.id}.reason}` : r.reason);
+    const amount = ph ? "{APP.amount}" : `Rs ${lr.amount_lakh} lakh`;
+    const tenure = ph ? "{APP.tenure}" : `${lr.tenure_months} months`;
+    const rate = ph ? "{APP.rate}" : `${lr.annual_rate_pct}%`;
+    const label = ph ? "{OUTCOME}" : rec.label;
+    const labelLower = ph ? "{OUTCOME.lower}" : rec.label.toLowerCase();
     const lines = ["### Summary",
-      `${b.name}, a ${b.industry.toLowerCase()} business, has asked for Rs ${lr.amount_lakh} lakh over ${lr.tenure_months} months at ${lr.annual_rate_pct}% [APP].`,
-      `Against the lender's policy, the file is: ${rec.label.toLowerCase()} [POLICY].`,
+      `${b.name}, ${/^[AEIOU]/.test(b.industry) ? "an" : "a"} ${b.industry.toLowerCase()} business, has asked for ${amount} over ${tenure} at ${rate} [APP].`,
+      `Against the lender's policy, the file is: ${labelLower} [POLICY].`,
       "### Concerns"];
     const concerns = by("FAIL").filter((r) => r.metric !== "documents_complete")
-      .map((r) => `${r.short} is ${r.value_display}, but the policy needs ${r.threshold_display} [${r.id}].`)
-      .concat(by("BORDERLINE").map((r) => `${r.short} is ${r.value_display}, close to the limit of ${r.threshold_display} [${r.id}].`));
+      .map((r) => `${r.short} is ${val(r)}, but the policy needs ${lim(r)} [${r.id}].`)
+      .concat(by("BORDERLINE").map((r) => `${r.short} is ${val(r)}, close to the limit of ${lim(r)} [${r.id}].`));
     lines.push(...(concerns.length ? concerns : ["None [POLICY]."]), "### Missing information");
-    const missing = by("CANT_CHECK").map((r) => `${r.short} could not be checked (${r.reason}) [${r.id}].`)
-      .concat(by("FAIL").filter((r) => r.metric === "documents_complete").map((r) => `${r.reason} [${r.id}].`));
+    const missing = by("CANT_CHECK").map((r) => `${r.short} could not be checked (${why(r)}) [${r.id}].`)
+      .concat(by("FAIL").filter((r) => r.metric === "documents_complete").map((r) => `${why(r)} [${r.id}].`));
     lines.push(...(missing.length ? missing : ["None [POLICY]."]), "### Strengths");
     const strengths = by("PASS").filter((r) => ["dscr", "debt_to_ebitda", "current_ratio", "bureau_score"].includes(r.metric))
-      .map((r) => `${r.short} is ${r.value_display}, comfortably within the limit of ${r.threshold_display} [${r.id}].`);
+      .map((r) => `${r.short} is ${val(r)}, comfortably within the limit of ${lim(r)} [${r.id}].`);
     lines.push(...(strengths.length ? strengths : ["None [POLICY]."]));
-    lines.push("### Recommendation", `${rec.label} [POLICY]. ${rec.explain.slice(0, -1)} [POLICY].`);
+    lines.push("### Recommendation", `${label} [POLICY]. ${rec.explain.slice(0, -1)} [POLICY].`);
     return lines.join("\n");
   }
+  const templateMemo = (ev) => buildMemo(ev, false);
+  const memoOutline = (ev) => buildMemo(ev, true);
 
-  const MEMO_PROMPT = `You are drafting a short credit memo for a human credit reviewer at a lender.
+  const MEMO_PROMPT = `Rewrite this credit memo in friendlier, plain English for a new analyst.
 
-Rules you must follow:
-1. NEVER type a digit. Wherever a number belongs, copy the placeholder from the facts exactly,
-   for example {R4.value} or {APP.amount}. Code replaces placeholders with the real figures.
-2. Do not change the outcome. State it with the {OUTCOME} placeholder.
-3. Describe each rule's result truthfully: a FAIL rule does not meet the policy, a PASS rule does.
-4. End every sentence with the tags of the facts it relies on, placed before the full stop,
-   like "... does not meet the policy [R4]." Use [APP] for loan application details and
-   [POLICY] for the overall outcome.
-5. Plain English that a new analyst can follow. 120 to 200 words.
-6. Use exactly these headings, each on its own line starting with "### ":
-   Summary, Concerns, Missing information, Strengths, Recommendation.
-   If a section has nothing, write "None [POLICY]."
+Rules:
+- Keep the same headings, in the same order. Keep the meaning of every line.
+- Keep every {placeholder} and every [tag] exactly as written. Do not add, remove or change them.
+- Never write a digit. Do not add any facts.
+- Every sentence must still end with its [tag] before the full stop.
+- Reply with the rewritten memo only.
 
-FACTS:
+MEMO:
 `;
 
-  function memoPrompt(ev) { return MEMO_PROMPT + JSON.stringify(memoFacts(ev), null, 2); }
+  function memoPrompt(ev) { return MEMO_PROMPT + memoOutline(ev) + "\n\nREWRITTEN MEMO:\n"; }
+
+  /* Tidies what small models add around a memo: chatty intros, code fences, "##" headings, bullets. */
+  function cleanDraft(text) {
+    let t = String(text || "").replace(/```[a-z]*\n?/gi, "");
+    const i = t.search(/^\s*#{1,6}\s*\S/m);
+    if (i > 0) t = t.slice(i);
+    return t.split("\n").map((l) => l.replace(/^\s*#{1,6}\s*/, "### ").replace(/^\s*[-*•]\s+/, "")).join("\n").trim();
+  }
 
   function parseNumbers(text) {
     const out = [];
@@ -377,7 +382,7 @@ FACTS:
     return { memo, old: null, wrong: null };
   }
 
-  const api = { STATUS_ORDER, STATUS_LABEL, evaluate, reviewQueue, fmt, templateMemo, memoPrompt, memoSlots, fillPlaceholders,
+  const api = { STATUS_ORDER, STATUS_LABEL, evaluate, reviewQueue, fmt, templateMemo, memoOutline, memoPrompt, memoSlots, fillPlaceholders, cleanDraft,
     checkMemo, injectError, yearlyRepayment };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.CAM = api;

@@ -24,5 +24,13 @@
     {"name": "K. AI-style draft with placeholders, filled by code", "borrower": "B02",
      "draft": "### Summary\nThe borrower asks for {APP.amount} over {APP.tenure} at {APP.rate} [APP].\n### Concerns\nDSCR is {R4.value}, below the minimum of {R4.limit} [R4].\n### Recommendation\n{OUTCOME} [POLICY].",
      "expect": "allowed"}
+  ],
+  "clean_cases": [
+    {"name": "chatty intro and code fence removed",
+     "input": "Sure! Here is the rewritten memo:\n```\n## Summary\nThe loan looks fine [APP].\n```",
+     "output": "### Summary\nThe loan looks fine [APP]."},
+    {"name": "bullets removed and heading level fixed",
+     "input": "#### Concerns\n- DSCR is {R4.value} [R4].\n* None [POLICY].",
+     "output": "### Concerns\nDSCR is {R4.value} [R4].\nNone [POLICY]."}
   ]
 }

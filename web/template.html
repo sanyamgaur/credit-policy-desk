@@ -31,7 +31,7 @@
       <div class="arrow">→</div>
       <div class="step"><b>2 · Code decides</b><span>Every rule: fails, can't check, borderline or passes</span></div>
       <div class="arrow">→</div>
-      <div class="step"><b>3 · AI writes</b><span>A small model in your browser drafts the memo</span></div>
+      <div class="step"><b>3 · AI rewords</b><span>A small model in your browser puts the memo in plain English</span></div>
       <div class="arrow">→</div>
       <div class="step"><b>4 · Code checks</b><span>Every number, citation and the outcome, before a human sees it</span></div>
     </div>
@@ -131,9 +131,10 @@
         </div>
         <div class="card">
           <h3>AI memo test (runs on this device)</h3>
-          <p style="margin-top:0">The on-device model writes a memo for all 12 files. It never types a number: it writes placeholders,
-            and code fills in the real figures. Code then checks each memo. A wrong figure, a sentence that contradicts a rule's
-            result, a sentence with no source, or a changed outcome is blocked.</p>
+          <p style="margin-top:0">Code writes an outline of each memo and decides what goes where. The on-device model only rewords it in
+            plainer English; it never types a number. Code fills the figures back in and checks the result. A wrong figure, a sentence
+            that contradicts a rule's result, a sentence with no source, or a changed outcome is blocked, and the model gets up to
+            3 tries. The table shows how often it needed more than one.</p>
           <div class="row"><button class="btn primary" id="run-ai-test">Run AI test on 12 files</button>
             <span class="muted" id="ai-test-status" style="font-size:13px"></span></div>
           <div id="ai-test" style="margin-top:10px"></div>

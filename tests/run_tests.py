@@ -37,7 +37,12 @@ def python_attacks(policy):
         report(memo.check_memo(text, ev, policy)["passed"], f"{path.stem} clean template memo passes")
         report(not memo.check_memo(memo.inject_error(text)[0], ev, policy)["passed"],
                f"{path.stem} planted demo error is caught")
-    for c in json.loads((ROOT / "tests" / "attack_cases.json").read_text())["cases"]:
+        report(memo.fill_placeholders(memo.memo_outline(ev), ev) == text,
+               f"{path.stem} outline filled by code equals the template memo")
+    spec = json.loads((ROOT / "tests" / "attack_cases.json").read_text())
+    for c in spec["clean_cases"]:
+        report(memo.clean_draft(c["input"]) == c["output"], f"tidy-up: {c['name']}")
+    for c in spec["cases"]:
         ev = engine.evaluate(engine.load_borrower(ROOT / "data" / "borrowers" / f"{c['borrower']}.json"), policy)
         if "draft" in c:
             text = memo.fill_placeholders(c["draft"], ev)

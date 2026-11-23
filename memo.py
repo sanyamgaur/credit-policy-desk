@@ -1,8 +1,8 @@
 """Writes the credit memo text, then checks it. Same logic as web/engine.js.
 
-The AI's only job is writing readable sentences. It never decides a result, and
-it never types a number: it writes placeholders like {R4.value}, and code fills
-in the real figures. After that, plain code checks the memo:
+The AI's only job is rewording an outline the code wrote, in plainer English. It
+never decides a result and never types a number: the outline holds placeholders
+like {R4.value}, and code fills in the real figures. After that, plain code checks the memo:
   1. Every figure must be an exact figure of the rule its sentence cites.
   2. Words must not contradict a rule's real result ("passes" for a failed rule).
   3. Every sentence must cite the rule it relies on, like [R4].
@@ -29,12 +29,17 @@ PLACEHOLDER = re.compile(r"\{([A-Z0-9]+\.[a-z]+|OUTCOME)\}")
 
 
 # ---------------- Writing ----------------
+# How the AI is used: code writes an OUTLINE of the memo (it decides which rule goes
+# under Concerns, Missing or Strengths) with placeholders instead of figures. The AI
+# may only reword the outline in plainer English. Code then fills every figure back in
+# and checks the result, so the AI never types a number and never makes a decision.
 
 def memo_slots(ev):
-    """Placeholders the AI may use, and the exact text code puts in their place."""
+    """Placeholders the AI may keep, and the exact text code puts in their place."""
     lr = ev["borrower"]["loan_request"]
+    label = ev["recommendation"]["label"]
     slots = {"APP.amount": f"Rs {lr['amount_lakh']} lakh", "APP.tenure": f"{lr['tenure_months']} months",
-             "APP.rate": f"{lr['annual_rate_pct']}%", "OUTCOME": ev["recommendation"]["label"]}
+             "APP.rate": f"{lr['annual_rate_pct']}%", "OUTCOME": label, "OUTCOME.lower": label.lower()}
     for r in ev["results"]:
         slots[f"{r['id']}.value"] = r["value_display"]
         slots[f"{r['id']}.limit"] = r["threshold_display"]
@@ -48,78 +53,85 @@ def fill_placeholders(draft, ev):
     return PLACEHOLDER.sub(lambda m: slots.get(m.group(1), m.group(0)), draft)
 
 
-def memo_facts(ev):
-    b = ev["borrower"]
-    return {
-        "borrower": b["name"], "industry": b["industry"],
-        "loan_request_tag_APP": "{APP.amount} over {APP.tenure} at {APP.rate}",
-        "outcome_tag_POLICY": "{OUTCOME}",
-        "outcome_meaning": ev["recommendation"]["explain"],
-        "rules": [{"tag": r["id"], "rule": r["short"], "result": r["status"],
-                   "value": f"{{{r['id']}.value}}", "limit": f"{{{r['id']}.limit}}",
-                   "why_not_checked": f"{{{r['id']}.reason}}" if r["reason"] else None}
-                  for r in ev["results"]],
-    }
-
-
-def template_memo(ev):
-    """Memo written by fixed code. Used when no AI is available."""
+def build_memo(ev, ph):
+    """ph=True gives the outline (placeholders); ph=False gives the finished template memo.
+    Filling an outline's placeholders must give back exactly the template memo (tested)."""
     b, rec = ev["borrower"], ev["recommendation"]
     lr = b["loan_request"]
     by = {s: [r for r in ev["results"] if r["status"] == s]
           for s in ("FAIL", "CANT_CHECK", "BORDERLINE", "PASS")}
+
+    def val(r): return f"{{{r['id']}.value}}" if ph else r["value_display"]
+    def lim(r): return f"{{{r['id']}.limit}}" if ph else r["threshold_display"]
+    def why(r): return f"{{{r['id']}.reason}}" if ph else r["reason"]
+
+    amount = "{APP.amount}" if ph else f"Rs {lr['amount_lakh']} lakh"
+    tenure = "{APP.tenure}" if ph else f"{lr['tenure_months']} months"
+    rate = "{APP.rate}" if ph else f"{lr['annual_rate_pct']}%"
+    label = "{OUTCOME}" if ph else rec["label"]
+    label_lower = "{OUTCOME.lower}" if ph else rec["label"].lower()
     lines = ["### Summary",
-             f"{b['name']}, a {b['industry'].lower()} business, has asked for "
-             f"Rs {lr['amount_lakh']} lakh over {lr['tenure_months']} months at "
-             f"{lr['annual_rate_pct']}% [APP].",
-             f"Against the lender's policy, the file is: {rec['label'].lower()} [POLICY].",
+             f"{b['name']}, {'an' if b['industry'][0] in 'AEIOU' else 'a'} {b['industry'].lower()} business, has asked for {amount} over {tenure} at {rate} [APP].",
+             f"Against the lender's policy, the file is: {label_lower} [POLICY].",
              "### Concerns"]
-    concerns = [f"{r['short']} is {r['value_display']}, but the policy needs "
-                f"{r['threshold_display']} [{r['id']}]." for r in by["FAIL"]
-                if r["metric"] != "documents_complete"]
-    concerns += [f"{r['short']} is {r['value_display']}, close to the limit of "
-                 f"{r['threshold_display']} [{r['id']}]." for r in by["BORDERLINE"]]
+    concerns = [f"{r['short']} is {val(r)}, but the policy needs {lim(r)} [{r['id']}]."
+                for r in by["FAIL"] if r["metric"] != "documents_complete"]
+    concerns += [f"{r['short']} is {val(r)}, close to the limit of {lim(r)} [{r['id']}]." for r in by["BORDERLINE"]]
     lines += concerns or ["None [POLICY]."]
     lines.append("### Missing information")
-    missing = [f"{r['short']} could not be checked ({r['reason']}) [{r['id']}]."
-               for r in by["CANT_CHECK"]]
-    missing += [f"{r['reason']} [{r['id']}]." for r in by["FAIL"]
-                if r["metric"] == "documents_complete"]
+    missing = [f"{r['short']} could not be checked ({why(r)}) [{r['id']}]." for r in by["CANT_CHECK"]]
+    missing += [f"{why(r)} [{r['id']}]." for r in by["FAIL"] if r["metric"] == "documents_complete"]
     lines += missing or ["None [POLICY]."]
     lines.append("### Strengths")
-    strengths = [f"{r['short']} is {r['value_display']}, comfortably within the limit of "
-                 f"{r['threshold_display']} [{r['id']}]." for r in by["PASS"]
-                 if r["metric"] in ("dscr", "debt_to_ebitda", "current_ratio", "bureau_score")]
+    strengths = [f"{r['short']} is {val(r)}, comfortably within the limit of {lim(r)} [{r['id']}]."
+                 for r in by["PASS"] if r["metric"] in ("dscr", "debt_to_ebitda", "current_ratio", "bureau_score")]
     lines += strengths or ["None [POLICY]."]
-    lines += ["### Recommendation", f"{rec['label']} [POLICY]. {rec['explain'][:-1]} [POLICY]."]
+    lines += ["### Recommendation", f"{label} [POLICY]. {rec['explain'][:-1]} [POLICY]."]
     return "\n".join(lines)
 
 
-PROMPT = """You are drafting a short credit memo for a human credit reviewer at a lender.
+def template_memo(ev):
+    """Memo written by fixed code. Used when no AI is available."""
+    return build_memo(ev, False)
 
-Rules you must follow:
-1. NEVER type a digit. Wherever a number belongs, copy the placeholder from the facts exactly,
-   for example {{R4.value}} or {{APP.amount}}. Code replaces placeholders with the real figures.
-2. Do not change the outcome. State it with the {{OUTCOME}} placeholder.
-3. Describe each rule's result truthfully: a FAIL rule does not meet the policy, a PASS rule does.
-4. End every sentence with the tags of the facts it relies on, placed before the full stop,
-   like "... does not meet the policy [R4]." Use [APP] for loan application details and
-   [POLICY] for the overall outcome.
-5. Plain English that a new analyst can follow. 120 to 200 words.
-6. Use exactly these headings, each on its own line starting with "### ":
-   Summary, Concerns, Missing information, Strengths, Recommendation.
-   If a section has nothing, write "None [POLICY]."
 
-FACTS:
-{facts}
+def memo_outline(ev):
+    return build_memo(ev, True)
+
+
+PROMPT = """Rewrite this credit memo in friendlier, plain English for a new analyst.
+
+Rules:
+- Keep the same headings, in the same order. Keep the meaning of every line.
+- Keep every {{placeholder}} and every [tag] exactly as written. Do not add, remove or change them.
+- Never write a digit. Do not add any facts.
+- Every sentence must still end with its [tag] before the full stop.
+- Reply with the rewritten memo only.
+
+MEMO:
+{outline}
+
+REWRITTEN MEMO:
 """
 
 
+def clean_draft(text):
+    """Tidies what models add around a memo: chatty intros, code fences, '##' headings, bullets."""
+    t = re.sub(r"```[a-z]*\n?", "", text or "", flags=re.I)
+    m = re.search(r"^\s*#{1,6}\s*\S", t, re.M)
+    if m and m.start() > 0:
+        t = t[m.start():]
+    lines = []
+    for ln in t.split("\n"):
+        ln = re.sub(r"^\s*#{1,6}\s*", "### ", ln)
+        lines.append(re.sub(r"^\s*[-*•]\s+", "", ln))
+    return "\n".join(lines).strip()
+
+
 def ai_memo(ev):
-    """Gemini writes a draft with placeholders; code fills in every figure."""
-    draft = llm.generate(PROMPT.format(facts=json.dumps(memo_facts(ev), indent=2)),
-                         temperature=0.2).strip()
-    return fill_placeholders(draft, ev)
+    """Gemini rewords the code's outline; code fills in every figure."""
+    draft = llm.generate(PROMPT.format(outline=memo_outline(ev)), temperature=0.2)
+    return fill_placeholders(clean_draft(draft), ev)
 
 
 # ---------------- Checks on the memo (plain code) ----------------
