@@ -50,7 +50,7 @@ code { font: .85em ui-monospace, SFMono-Regular, Menlo, monospace; background: v
 
 /* ---------- Header & hero ---------- */
 header.top { background: var(--surface); border-bottom: 1px solid var(--border); }
-.top-inner { display: flex; align-items: center; gap: 12px; padding: 12px 0; flex-wrap: wrap; }
+.top-inner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; flex-wrap: wrap; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 16px; }
 .mark { width: 26px; height: 26px; border-radius: 7px; background: var(--accent); color: var(--on-accent);
   display: grid; place-items: center; font-size: 14px; }
@@ -62,13 +62,29 @@ header.top { background: var(--surface); border-bottom: 1px solid var(--border);
 .hero { padding: 28px 0 4px; }
 .hero h1 { font-size: clamp(22px, 3.2vw, 30px); max-width: 880px; letter-spacing: -.02em; }
 .hero > p { color: var(--muted); max-width: 760px; font-size: 16px; }
-.hero-cta { margin-top: 16px; }
-.flow { list-style: none; counter-reset: step; display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 20px 0 0; }
-.flow li { counter-increment: step; flex: 1 1 200px; display: flex; gap: 6px; align-items: baseline; font-size: 13px;
-  padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
-.flow li::before { content: counter(step); font: 600 11px ui-monospace, Menlo, monospace; color: var(--accent); }
-.flow li b { white-space: nowrap; }
-.flow li span { color: var(--muted); }
+/* Feature cards: every capability visible on the first screen, each one a real entry point */
+.features { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+@media (max-width: 960px) { .features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .features { grid-template-columns: minmax(0, 1fr); } }
+.feature { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "icon title" "desc desc" "tag tag";
+  gap: 6px 10px; align-items: center; text-align: left; font: inherit; color: var(--text); cursor: pointer;
+  padding: 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow);
+  transition: border-color .15s var(--ease), transform .15s var(--ease), box-shadow .15s var(--ease); }
+.feature:hover { border-color: var(--accent); transform: translateY(-1px); }
+.feature.primary { border-color: var(--accent); background: var(--accent-soft); }
+.f-icon { grid-area: icon; width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.f-title { grid-area: title; font-weight: 650; font-size: 15px; }
+.f-desc { grid-area: desc; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.f-go { grid-area: tag; color: var(--accent); font-weight: 600; font-size: 13px; }
+.f-tag { grid-area: tag; justify-self: start; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--surface-2); color: var(--muted); }
+.f-tag.optional { background: var(--cant-soft); color: var(--cant); }
+.f-tag.ready { background: var(--pass-soft); color: var(--pass); }
+.f-tag.off { background: var(--fail-soft); color: var(--fail); }
+
+/* A brief highlight on the control a feature card sent you to */
+.spotlight { animation: spot 1.6s var(--ease); }
+@keyframes spot { 0%, 60% { box-shadow: 0 0 0 4px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 
 /* ---------- Buttons & inputs ---------- */
 .btns { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -111,7 +127,9 @@ section.panel.active { display: block; animation: fade .18s var(--ease); }
 .card h2 { margin-bottom: 10px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .card-head h2 { margin: 0; }
-.section-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 26px 0 10px; }
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 26px 0 10px;
+  scroll-margin-top: 84px; }  /* so the sticky step tracker never covers a heading you jumped to */
+html { scroll-behavior: smooth; }
 /* minmax(0, …) lets wide tables scroll inside their card instead of pushing the page sideways */
 .grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
 .grid-memo { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -221,6 +239,69 @@ mark.bad { background: var(--fail-soft); color: var(--fail); font-weight: 700; p
 .cursor::after { content: "▍"; animation: blink 1s steps(2) infinite; color: var(--accent); }
 @keyframes blink { 50% { opacity: 0; } }
 .empty { color: var(--muted); padding: 8px 0; }
+
+/* ---------- Step tracker (file review) ---------- */
+.stepper { position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+  margin: 14px 0 0; padding: 8px 0; background: var(--bg); }
+.step-link { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); text-decoration: none; min-width: 0; }
+.step-link:hover { border-color: var(--accent); }
+.step-link .num { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; background: var(--surface-2); color: var(--muted); }
+.step-link b { display: block; font-size: 13.5px; }
+.step-link small { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step-link.done .num { background: var(--pass); color: var(--surface); }
+.step-link.done .num::before { content: "✓"; }
+.step-link.done .num { font-size: 0; } .step-link.done .num::before { font-size: 12px; }
+.step-link.attn .num { background: var(--fail); color: var(--surface); }
+.step-link > span:last-child { min-width: 0; }
+.step-link b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Small phones: number + title only; the status is still in each section below */
+@media (max-width: 600px) { .step-link { padding: 6px 8px; gap: 6px; } .step-link b { font-size: 12px; } .step-link small { display: none; } }
+
+/* ---------- Rule cards: plain question + meter ---------- */
+.q { display: block; font-size: 12.5px; color: var(--muted); font-weight: 400; }
+.rule-main { display: flex; flex-direction: column; min-width: 0; flex: 1 1 200px; }
+.meter { position: relative; display: inline-block; width: 120px; height: 8px; border-radius: 999px; background: var(--fail-soft); flex: none; }
+.meter .zone { position: absolute; top: 0; bottom: 0; background: var(--pass-soft); border-radius: 999px; }
+.meter .limit { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--muted); }
+.meter .dot { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; transform: translate(-50%, -50%);
+  border: 2px solid var(--surface); }
+.meter .dot.s-FAIL { background: var(--fail); } .meter .dot.s-PASS { background: var(--pass); }
+.meter .dot.s-BORDERLINE { background: var(--border-s); } .meter .dot.s-CANT_CHECK { background: var(--cant); }
+.evidence { margin-top: 10px; }
+.evidence > summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+details.passing { margin-top: 12px; }
+details.passing > summary { cursor: pointer; padding: 10px 14px; border-radius: var(--radius); border: 1px dashed var(--border-strong);
+  color: var(--muted); font-size: 13.5px; list-style: none; }
+details.passing > summary::-webkit-details-marker { display: none; }
+
+/* ---------- Memo pipeline ---------- */
+.pipeline { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; padding: 0; margin: 0 0 12px; counter-reset: p; }
+.pipeline li { counter-increment: p; position: relative; padding: 8px 12px 8px 34px; font-size: 13px; border: 1px solid var(--border);
+  background: var(--surface); }
+.pipeline li:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.pipeline li:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.pipeline li + li { border-left: 0; }
+.pipeline li::before { content: counter(p); position: absolute; left: 10px; top: 9px; width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--surface-2); color: var(--muted); }
+.pipeline li b { display: block; font-weight: 600; }
+.pipeline li small { display: block; color: var(--muted); font-size: 12px; }
+.pipeline li.on::before { background: var(--accent); color: var(--on-accent); }
+.pipeline li.skipped { opacity: .55; }
+.pipeline li.good::before { background: var(--pass); color: var(--surface); content: "✓"; }
+.pipeline li.bad::before { background: var(--fail); color: var(--surface); content: "✕"; }
+@media (max-width: 600px) { .pipeline { grid-template-columns: minmax(0, 1fr); } .pipeline li + li { border-left: 1px solid var(--border); border-top: 0; }
+  .pipeline li:first-child, .pipeline li:last-child { border-radius: 0; } }
+.seg-tag { font-size: 10.5px; opacity: .75; margin-left: 4px; }
+
+/* ---------- Toast ---------- */
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 20; max-width: calc(100vw - 32px);
+  padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 500; background: var(--text); color: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .2); animation: rise .2s var(--ease); }
+.toast.good::before { content: "✓  "; color: var(--pass); }
+.toast.bad::before { content: "✕  "; color: var(--fail); }
+@keyframes rise { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
 /* ---------- About dialog ---------- */
 dialog { border: 1px solid var(--border); border-radius: 16px; padding: 0; width: min(720px, calc(100vw - 32px));

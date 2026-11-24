@@ -26,18 +26,33 @@
 <main class="wrap" id="main">
   <section class="hero" aria-labelledby="hero-title">
     <h1 id="hero-title">Catch policy breaks and wrong numbers before a credit memo reaches the reviewer.</h1>
-    <p>Code checks every rule in the lender's own policy, a small AI running in your browser rewords the memo, and code checks
-      every figure it wrote. Twelve made-up loan files are loaded, so you can try it straight away.</p>
-    <div class="btns hero-cta">
-      <button class="btn primary lg" id="cta-review" type="button">Review a flagged loan file →</button>
-      <button class="btn lg" id="cta-book" type="button">See all 12 files</button>
+    <p>12 made-up loan files are loaded. Pick where to start:</p>
+    <div class="features">
+      <button class="feature primary" type="button" data-go="review">
+        <svg class="f-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
+        <span class="f-title">Review a flagged file</span>
+        <span class="f-desc">See what breaks the policy and where each number came from.</span>
+        <span class="f-go">Start here →</span>
+      </button>
+      <button class="feature" type="button" data-go="whatif">
+        <svg class="f-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        <span class="f-title">Test a policy change</span>
+        <span class="f-desc">Tighten the rules and see which loans drop out.</span>
+        <span class="f-tag">Core</span>
+      </button>
+      <button class="feature" type="button" data-go="ai">
+        <svg class="f-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>
+        <span class="f-title">Let AI word the memo</span>
+        <span class="f-desc">A small model runs in your browser. Code checks every figure.</span>
+        <span class="f-tag optional" id="ai-feature-status">Optional · 290 MB download</span>
+      </button>
+      <button class="feature" type="button" data-go="break">
+        <svg class="f-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/><path d="M7.5 15h9"/></svg>
+        <span class="f-title">Try to fool the checker</span>
+        <span class="f-desc">Plant a wrong number and watch the memo get blocked.</span>
+        <span class="f-tag">Core</span>
+      </button>
     </div>
-    <ol class="flow" aria-label="How it works">
-      <li><b>Code reads</b><span>each figure, with its source page</span></li>
-      <li><b>Code decides</b><span>pass, fail, borderline or can't check</span></li>
-      <li><b>AI rewords</b><span>the memo, never typing a number</span></li>
-      <li><b>Code checks</b><span>figures, meaning and outcome</span></li>
-    </ol>
   </section>
 
   <div class="tabs" role="tablist" aria-label="Sections">
@@ -95,20 +110,31 @@
       <details class="spoiler"><summary>What was planted in this file (spoiler)</summary><p id="planted"></p></details>
     </div>
 
-    <div class="section-head"><h2>1 · Check these first</h2><span class="muted small" id="progress-note"></span></div>
+    <nav class="stepper" aria-label="Review steps">
+      <a href="#step-checks" class="step-link" id="st-1"><span class="num">1</span><span><b>Check the rules</b><small id="st-1-s"></small></span></a>
+      <a href="#step-memo" class="step-link" id="st-2"><span class="num">2</span><span><b>Credit memo</b><small id="st-2-s"></small></span></a>
+      <a href="#step-log" class="step-link" id="st-3"><span class="num">3</span><span><b>Audit log</b><small id="st-3-s"></small></span></a>
+    </nav>
+
+    <div class="section-head" id="step-checks"><h2>1 · Check the rules <span class="muted small" style="font-weight:400">problems first</span></h2><span class="muted small" id="progress-note"></span></div>
     <div id="queue"></div>
 
-    <div class="section-head"><h2>2 · Credit memo</h2>
+    <div class="section-head" id="step-memo"><h2>2 · Credit memo</h2>
       <div class="seg" role="group" aria-label="Who writes the memo">
         <button data-writer="template" aria-pressed="true" type="button">Code template</button>
-        <button data-writer="ai" aria-pressed="false" type="button">On-device AI</button>
+        <button data-writer="ai" aria-pressed="false" type="button">On-device AI <span class="seg-tag">optional</span></button>
       </div>
     </div>
+    <ol class="pipeline" id="pipeline" aria-label="How this memo is made">
+      <li id="pl-1"><b>Code writes the outline</b></li>
+      <li id="pl-2"><b>AI rewords it</b><small id="pl-2-s"></small></li>
+      <li id="pl-3"><b>Code checks it</b><small id="pl-3-s"></small></li>
+    </ol>
     <div class="card ai-box" id="ai-box" hidden>
       <div class="row">
         <select id="model" aria-label="AI model"></select>
-        <button class="btn" id="load-model" type="button">Load model</button>
-        <button class="btn primary" id="write-ai" type="button" disabled>Write memo</button>
+        <button class="btn" id="load-model" type="button">1 · Load model</button>
+        <button class="btn primary" id="write-ai" type="button" disabled>2 · Write memo</button>
       </div>
       <div class="progress" id="progress" hidden><div></div></div>
       <p class="muted small" id="ai-status" role="status" aria-live="polite"></p>
@@ -132,7 +158,7 @@
       </div>
     </div>
 
-    <div class="section-head"><h2>3 · Audit log</h2><span class="muted small">Saved in this browser</span></div>
+    <div class="section-head" id="step-log"><h2>3 · Audit log</h2><span class="muted small">Saved in this browser</span></div>
     <div class="card"><div id="audit"></div></div>
   </section>
 
@@ -217,6 +243,8 @@
       <a href="https://github.com/sanyamgaur/credit-policy-desk" target="_blank" rel="noopener">Code on GitHub ↗</a></p>
   </div>
 </dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <footer>
   <div class="wrap">

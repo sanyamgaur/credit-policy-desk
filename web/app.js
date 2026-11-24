@@ -94,9 +94,56 @@
       if (d) { e.preventDefault(); showTab(tabButtons[(i + d + tabButtons.length) % tabButtons.length].dataset.tab, true); }
     });
   });
-  const goToTabs = () => document.querySelector(".tabs").scrollIntoView({ behavior: "smooth", block: "start" });
-  $("cta-review").addEventListener("click", () => { current = attentionOrder(evalAll(policy))[0].borrower.id; showTab("review"); goToTabs(); });
-  $("cta-book").addEventListener("click", () => { showTab("book"); goToTabs(); });
+  const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const scrollToEl = (el) => el.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+  const goToTabs = () => scrollToEl(document.querySelector(".tabs"));
+  // Briefly outline the control a feature card sent the user to, so they see where to act.
+  function spotlight(el) {
+    el.classList.remove("spotlight"); void el.offsetWidth; el.classList.add("spotlight");
+    setTimeout(() => el.classList.remove("spotlight"), 1700);
+  }
+  function openFirstFlagged() { current = attentionOrder(evalAll(policy))[0].borrower.id; showTab("review"); }
+
+  // ---------------- Feature cards: each one opens the exact place to use that feature ----------------
+  document.querySelectorAll("[data-go]").forEach((card) => card.addEventListener("click", () => {
+    const go = card.dataset.go;
+    if (go === "review") { openFirstFlagged(); goToTabs(); }
+    if (go === "whatif") {
+      showTab("book");
+      const btn = document.querySelector('[data-preset="tight"]');
+      scrollToEl(document.querySelector("#tab-book .policy"));
+      btn.focus({ preventScroll: true }); spotlight(btn);
+    }
+    if (go === "ai") {
+      openFirstFlagged();
+      document.querySelector('[data-writer="ai"]').click();
+      scrollToEl($("step-memo"));
+      const target = !navigator.gpu ? $("ai-box") : llm ? $("write-ai") : $("load-model");
+      if (target.focus) target.focus({ preventScroll: true });
+      spotlight(target);
+    }
+    if (go === "break") {
+      openFirstFlagged();
+      scrollToEl($("step-memo"));
+      $("plant").focus({ preventScroll: true }); spotlight($("plant"));
+    }
+  }));
+
+  // ---------------- Toast: short confirmation after an action ----------------
+  let toastTimer = null;
+  function toast(msg, kind = "") {
+    const t = $("toast");
+    t.hidden = true; t.className = `toast ${kind}`; t.textContent = msg; void t.offsetWidth; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 2800);
+  }
+
+  // ---------------- AI feature status, shown on its card ----------------
+  function setAiFeature(text, cls) {
+    const tag = $("ai-feature-status");
+    tag.textContent = text; tag.className = `f-tag ${cls}`;
+  }
+  if (!navigator.gpu) setAiFeature("Not available in this browser", "off");
 
   // ---------------- About dialog ----------------
   const about = $("about");
@@ -117,6 +164,7 @@
       if (!Number.isFinite(v) || v < 0) return;   // ignore half-typed or negative limits
       policy.rules[+inp.dataset.i].threshold = v;
       renderPortfolio();
+      announcePolicy(600);
     }));
     markEdited();
   }
@@ -125,6 +173,7 @@
     if (!Number.isFinite(v) || v < 0 || v > 25) return;
     policy.borderline_margin_pct = v;
     renderPortfolio();
+    announcePolicy(600);
   });
   document.querySelectorAll("[data-preset]").forEach((btn) => btn.addEventListener("click", () => {
     policy = clone(ORIGINAL);
@@ -132,7 +181,18 @@
     if (p) policy.rules.forEach((r) => { if (r.id in p) r.threshold = p[r.id]; });
     renderPolicyRows();
     renderPortfolio();
+    announcePolicy(0);
   }));
+  // Confirms a policy change and says how many files it moved (debounced while typing).
+  let policyTimer = null;
+  function announcePolicy(delay) {
+    clearTimeout(policyTimer);
+    policyTimer = setTimeout(() => {
+      if (!policyEdited()) { toast("Back to the original policy", "good"); return; }
+      const moved = evalAll(policy).filter((ev, i) => ev.recommendation.code !== BASE[i].recommendation.code).length;
+      toast(`Policy updated · ${moved} file${moved === 1 ? "" : "s"} changed outcome`, "good");
+    }, delay);
+  }
   $("sort-attention").addEventListener("change", () => renderPortfolio());
   function markEdited() {
     policy.rules.forEach((r, i) => {
@@ -209,8 +269,8 @@
 
     const flagged = q.filter((r) => r.status !== "PASS"), passing = q.filter((r) => r.status === "PASS");
     $("queue").innerHTML = (flagged.length ? flagged.map((r) => ruleCard(r, true)).join("")
-      : `<div class="ok">Nothing to check first: every rule passes comfortably.</div>`)
-      + (passing.length ? `<p class="passing-head">Passing rules (${passing.length})</p>` + passing.map((r) => ruleCard(r, false)).join("") : "");
+      : `<div class="ok">Nothing to check: every rule passes comfortably. Go to the memo below.</div>`)
+      + (passing.length ? `<details class="passing"><summary>✓ ${passing.length} rules pass · show them</summary>${passing.map((r) => ruleCard(r, false)).join("")}</details>` : "");
     $("queue").querySelectorAll("[data-rid]").forEach(wireDecision);
     renderProgress();
     renderMemo();
@@ -219,19 +279,42 @@
 
   const edited = (r) => ORIGINAL.rules.find((o) => o.id === r.id).threshold !== r.threshold;
 
+  // Each rule as a plain question, so nobody needs to know what "DSCR" means to follow along.
+  const QUESTION = {
+    R1: "Has the business run long enough?", R2: "Does the owner have a good credit record?",
+    R3: "Any recent late repayments?", R4: "Can profit cover all loan repayments?",
+    R5: "Is total debt manageable for its profit?", R6: "Can it pay its short-term bills?",
+    R7: "Do tax-reported sales match audited revenue?", R8: "Does the bank account show the sales it reports?",
+    R9: "Any bounced payments recently?", R10: "Are all required documents in?",
+  };
+
+  // A small gauge: green = allowed zone, line = the limit, dot = this borrower.
+  function meter(r) {
+    if (typeof r.value !== "number" || r.op === "==") return "";
+    const v = r.value, lim = r.threshold;
+    const lo = Math.min(v, lim) * 0.5, hi = Math.max(v, lim) * 1.3 || 1;
+    const pct = (x) => Math.max(0, Math.min(100, ((x - lo) / (hi - lo)) * 100));
+    const zone = r.op === ">=" ? `left:${pct(lim)}%;right:0` : `left:0;width:${pct(lim)}%`;
+    return `<span class="meter" role="img" aria-label="${esc(r.short)} ${esc(r.value_display)}, limit ${esc(r.threshold_display)}">
+      <span class="zone" style="${zone}"></span><span class="limit" style="left:${pct(lim)}%"></span><span class="dot s-${r.status}" style="left:${pct(v)}%"></span></span>`;
+  }
+
   function ruleCard(r, open) {
     const d = decisions[decisionKey(r.id)];
     const inputs = r.inputs.length ? `<div class="table-wrap"><table><thead><tr><th>Input</th><th>Value</th><th>Where it came from</th></tr></thead><tbody>${
       r.inputs.map((i) => `<tr><td>${esc(i.label)}</td><td>${esc(typeof i.value === "number" ? CAM.fmt(i.value, i.unit) : i.value)}</td><td>${esc(i.source)}</td></tr>`).join("")}</tbody></table></div>` : "";
     const decide = r.status === "PASS" ? "" : `<div class="decide" data-rid="${r.id}">
-      <div><label for="dec-${r.id}">Reviewer decision</label><select id="dec-${r.id}">${DECISIONS.map((x) => `<option ${d && x === d.decision ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
+      <div><label for="dec-${r.id}">Your decision</label><select id="dec-${r.id}">${DECISIONS.map((x) => `<option ${d && x === d.decision ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
       <div><label for="why-${r.id}">Reason (needed for any override)</label><input id="why-${r.id}" type="text" value="${esc(d ? d.reason : "")}" placeholder="e.g. Promoter brought in Rs 40 lakh fresh equity"></div>
-      <div class="err" hidden style="grid-column:1/-1">An override needs a written reason. Nothing is recorded until you add one.</div></div>`;
+      <div class="err" hidden style="grid-column:1/-1">Add a reason to record this override.</div></div>`;
+    const calc = r.how ? `<p class="small"><b>How it's worked out:</b> <code>${esc(r.how)}</code> = <b>${esc(r.value_display)}</b></p>` : "";
     return `<details class="rule" ${open ? "open" : ""}><summary><span class="cell s-${r.status}" aria-hidden="true">${ICON[r.status]}</span>
-      <span class="title">${r.id} · ${esc(r.short)}</span><span class="badge s-${r.status}">${esc(CAM.STATUS_LABEL[r.status])}</span>
-      <span class="val">${esc(r.value_display)} · policy: ${esc(r.threshold_display)}</span>${d ? `<span class="decided" id="done-${r.id}">✓ decided</span>` : `<span class="decided" id="done-${r.id}"></span>`}</summary>
-      <div class="body"><p><b>Rule:</b> ${esc(r.text)}${edited(r) ? ` <span class="badge" style="background:var(--accent-soft);color:var(--accent)">Edited: now ${esc(r.threshold_display)}</span>` : ""}</p>${r.reason ? `<div class="warn">${esc(r.reason)}</div>` : ""}
-      ${inputs}${r.how ? `<p><b>Calculation:</b> <code>${esc(r.how)}</code> = <b>${esc(r.value_display)}</b></p>` : ""}${decide}</div></details>`;
+      <span class="rule-main"><span class="title">${esc(r.short)} <span class="badge s-${r.status}">${esc(CAM.STATUS_LABEL[r.status])}</span></span><span class="q">${esc(QUESTION[r.id] || r.text)}</span></span>
+      <span class="val">${esc(r.value_display)} <span class="muted">· limit ${esc(r.threshold_display)}</span></span>${meter(r)}
+      <span class="decided" id="done-${r.id}">${d ? "✓ decided" : ""}</span></summary>
+      <div class="body">${r.reason ? `<div class="warn">${esc(r.reason)}</div>` : ""}${edited(r) ? `<p class="note small">Limit edited in Loan book: now ${esc(r.threshold_display)}.</p>` : ""}
+      ${decide}${calc}
+      <details class="evidence"><summary>Where the numbers came from${r.inputs.length ? ` (${r.inputs.length})` : ""}</summary><p class="small"><b>Policy rule (${r.id}):</b> ${esc(r.text)}</p>${inputs}</details></div></details>`;
   }
 
   function wireDecision(box) {
@@ -239,6 +322,7 @@
     const ev = CAM.evaluate(byId(current), policy), r = ev.results.find((x) => x.id === rid);
     const update = () => {
       const key = decisionKey(rid);
+      const wasSaved = !!decisions[key];
       const missingReason = sel.value.startsWith("Override") && !txt.value.trim();
       err.hidden = !missingReason;
       if (missingReason || sel.value === DECISIONS[0]) delete decisions[key];   // overrides need a reason
@@ -246,6 +330,8 @@
         value: r.value_display, policy: policyVersion(), at: new Date().toISOString() };
       saveDecisions();
       $(`done-${rid}`).textContent = decisions[key] ? "✓ decided" : "";
+      if (!wasSaved && decisions[key]) toast("Decision saved to the audit log", "good");
+      if (wasSaved && !decisions[key]) toast(missingReason ? "Not recorded: an override needs a reason" : "Decision removed", missingReason ? "bad" : "");
       renderProgress();
       renderAudit();
     };
@@ -258,6 +344,21 @@
     const flagged = ev.results.filter((r) => r.status !== "PASS");
     const done = flagged.filter((r) => decisions[decisionKey(r.id)]).length;
     $("progress-note").textContent = flagged.length ? `${done} of ${flagged.length} flagged rules decided` : "";
+    updateStepper();
+  }
+
+  // Step tracker: shows where the reviewer is and what's left, without reading the page.
+  let memoState = "none";   // "none" | "passed" | "blocked"
+  function updateStepper() {
+    const ev = CAM.evaluate(byId(current), policy);
+    const flagged = ev.results.filter((r) => r.status !== "PASS");
+    const done = flagged.filter((r) => decisions[decisionKey(r.id)]).length;
+    const set = (id, text, cls) => { $(id).className = `step-link ${cls}`; $(`${id}-s`).textContent = text; };
+    set("st-1", flagged.length ? `${done} of ${flagged.length} flagged decided` : "Nothing flagged", done === flagged.length ? "done" : "");
+    set("st-2", memoState === "passed" ? "Passed the checks" : memoState === "blocked" ? "Blocked by the checks" : "Not written yet",
+      memoState === "passed" ? "done" : memoState === "blocked" ? "attn" : "");
+    const n = Object.values(decisions).filter((d) => d.file === current).length;
+    set("st-3", n ? `${n} entr${n === 1 ? "y" : "ies"} for this file` : "No entries yet", n ? "done" : "");
   }
 
   function renderAudit() {
@@ -265,7 +366,8 @@
     $("audit").innerHTML = rows.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th>File</th><th>Rule</th><th>Value then</th><th>Decision</th><th>Reason</th><th>Policy</th></tr></thead><tbody>${
       rows.map((r) => `<tr><td>${esc(new Date(r.at).toLocaleString())}</td><td>${esc(r.file)}</td><td>${esc(r.rule)}</td><td>${esc(r.value)}</td><td>${esc(r.decision)}</td><td>${esc(r.reason)}</td><td>${esc(r.policy)}</td></tr>`).join("")}</tbody></table></div>
       <div class="btns" style="margin-top:10px"><button class="btn small" id="dl-audit" type="button">Download CSV</button><button class="btn small ghost" id="clear-audit" type="button">Clear log</button></div>`
-      : `<p class="empty">No decisions yet. Choose a decision on any flagged rule above and it's recorded here with the time, the value at that moment and the policy version.</p>`;
+      : `<p class="empty">No decisions yet. Make one on a flagged rule above and it's recorded here.</p>`;
+    updateStepper();
     if (!rows.length) return;
     $("dl-audit").addEventListener("click", () => {
       // Quote every cell, and stop spreadsheet apps running text that starts like a formula.
@@ -274,12 +376,14 @@
         ...rows.map((r) => [r.at, r.file, r.rule, r.value, r.decision, r.reason, r.policy].map(q).join(","))].join("\n");
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: "audit_log.csv" });
       a.click();
+      toast("Audit log downloaded", "good");
     });
     $("clear-audit").addEventListener("click", () => {
       if (!confirm("Clear every recorded decision from this browser?")) return;
       Object.keys(decisions).forEach((k) => delete decisions[k]);
       saveDecisions();
       renderReview();
+      toast("Audit log cleared");
     });
   }
 
@@ -296,6 +400,7 @@
     $("plant").setAttribute("aria-pressed", plant);
     $("plant").textContent = plant ? "Remove the planted number" : "Test the checker: plant a wrong number";
     renderMemoOutput();
+    toast(plant ? "Wrong number planted: the checks block the memo" : "Planted number removed", plant ? "bad" : "good");
   });
   $("load-model").addEventListener("click", () => ensureModel().catch(showAiError));
   $("write-ai").addEventListener("click", () => writeAiMemo(current).catch(showAiError));
@@ -370,6 +475,7 @@
         <button class="btn small" type="button" id="use-template">Use the code template instead</button>`;
       $("use-template").addEventListener("click", () => document.querySelector('[data-writer="template"]').click());
       $("memo-checks").innerHTML = `<p class="empty">Checks run as soon as there's a memo.</p>`;
+      memoState = "none"; renderPipeline("", null, false); updateStepper();
       return;
     }
     let plantNote = "";
@@ -380,7 +486,7 @@
     }
     const c = CAM.checkMemo(text, ev, policy);
     $("memo-text").innerHTML = renderMemoMarkdown(text, c.unmatched.map((n) => n.number), streaming);
-    if (streaming) { $("memo-checks").innerHTML = `<p class="empty">Waiting for the model to finish…</p>`; return; }
+    if (streaming) { $("memo-checks").innerHTML = `<p class="empty">Waiting for the model to finish…</p>`; renderPipeline(text, c, true); return; }
     const okN = c.numbers.filter((n) => n.ok).length;
     const line = (ok, title, body, items) => `<div class="check-line"><span class="ic" aria-hidden="true">${ok ? "✅" : "❌"}</span><div><b>${title}</b> ${body}${items || ""}</div></div>`;
     $("memo-checks").innerHTML = plantNote
@@ -394,6 +500,26 @@
         c.decisionConflicts.map((x) => `<div class="err">${esc(x.why)}.<br><small>${esc(x.sentence)}</small></div>`).join(""))
       + (c.placeholders.length ? line(false, "Unfilled placeholders:", esc(c.placeholders.join(", "))) : "")
       + (c.passed ? `<div class="ok">Passed every check. Ready for the reviewer.</div>` : `<div class="err">Blocked. Fix the flagged items before it reaches the reviewer.</div>`);
+    memoState = c.passed ? "passed" : "blocked";
+    renderPipeline(text, c, false);
+    updateStepper();
+  }
+
+  const modelName = (id) => MODELS.find((m) => m[0] === id)[1].split(" · ").slice(0, 2).join(" ");
+
+  // The 3-step strip above the memo: who did what to this memo, and the result.
+  function renderPipeline(text, c, streaming) {
+    const meta = aiMeta[sourceKey()];
+    $("pl-1").className = "on";
+    if (writer === "template") {
+      $("pl-2").className = "skipped"; $("pl-2-s").textContent = "Skipped: code template";
+    } else {
+      $("pl-2").className = text ? "on" : "";
+      $("pl-2-s").textContent = streaming ? "Writing…" : meta ? `${modelName(meta.model)} · ${meta.tries} ${meta.tries === 1 ? "try" : "tries"}`
+        : llm ? "Ready: click Write memo" : "Load the model first";
+    }
+    $("pl-3").className = !text || streaming ? "" : c.passed ? "good" : "bad";
+    $("pl-3-s").textContent = !text ? "Waiting for a memo" : streaming ? "Runs when writing ends" : c.passed ? "Passed" : "Blocked";
   }
 
   // ---------------- On-device AI (WebLLM) ----------------
@@ -401,9 +527,11 @@
     $("progress").hidden = false;
     $("progress").firstElementChild.style.width = `${Math.round(frac * 100)}%`;
     $("ai-status").textContent = text;
+    if (frac < 1) setAiFeature(`Loading · ${Math.round(frac * 100)}%`, "optional");
   }
   function showAiError(e) {
     busy = false;
+    setAiFeature("Couldn't load · template still works", "off");
     $("load-model").disabled = false;
     $("ai-status").innerHTML = `<span style="color:var(--fail)">${esc(e.message || e)}</span> You can keep using the code template.`;
   }
@@ -419,6 +547,8 @@
     llm = await webllm.CreateMLCEngine(id, { initProgressCallback: (r) => setProgress(r.progress || 0, r.text || "") });
     llmModel = id;
     setProgress(1, `Ready: ${MODELS.find((m) => m[0] === id)[1]} is running on this device.`);
+    setAiFeature("Ready · runs on this device", "ready");
+    toast("AI model ready. It runs on this device.", "good");
     $("load-model").disabled = false; $("write-ai").disabled = false;
     renderMemoOutput();
   }
@@ -468,6 +598,7 @@
       $("ai-status").textContent = r.check.passed
         ? `Passed every check${r.tries > 1 ? ` on try ${r.tries} of ${MAX_TRIES}` : " on the first try"}.`
         : `All ${MAX_TRIES} tries were blocked. The last draft is shown so you can see why. Use the code template, or try again.`;
+      toast(r.check.passed ? "AI memo passed every check" : `AI memo blocked after ${MAX_TRIES} tries`, r.check.passed ? "good" : "bad");
     } finally {
       busy = false; $("write-ai").disabled = false;
     }

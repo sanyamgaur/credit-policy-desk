@@ -58,7 +58,7 @@ code { font: .85em ui-monospace, SFMono-Regular, Menlo, monospace; background: v
 
 /* ---------- Header & hero ---------- */
 header.top { background: var(--surface); border-bottom: 1px solid var(--border); }
-.top-inner { display: flex; align-items: center; gap: 12px; padding: 12px 0; flex-wrap: wrap; }
+.top-inner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; flex-wrap: wrap; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 16px; }
 .mark { width: 26px; height: 26px; border-radius: 7px; background: var(--accent); color: var(--on-accent);
   display: grid; place-items: center; font-size: 14px; }
@@ -70,13 +70,29 @@ header.top { background: var(--surface); border-bottom: 1px solid var(--border);
 .hero { padding: 28px 0 4px; }
 .hero h1 { font-size: clamp(22px, 3.2vw, 30px); max-width: 880px; letter-spacing: -.02em; }
 .hero > p { color: var(--muted); max-width: 760px; font-size: 16px; }
-.hero-cta { margin-top: 16px; }
-.flow { list-style: none; counter-reset: step; display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 20px 0 0; }
-.flow li { counter-increment: step; flex: 1 1 200px; display: flex; gap: 6px; align-items: baseline; font-size: 13px;
-  padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
-.flow li::before { content: counter(step); font: 600 11px ui-monospace, Menlo, monospace; color: var(--accent); }
-.flow li b { white-space: nowrap; }
-.flow li span { color: var(--muted); }
+/* Feature cards: every capability visible on the first screen, each one a real entry point */
+.features { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 14px; }
+@media (max-width: 960px) { .features { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 520px) { .features { grid-template-columns: minmax(0, 1fr); } }
+.feature { display: grid; grid-template-columns: auto 1fr; grid-template-areas: "icon title" "desc desc" "tag tag";
+  gap: 6px 10px; align-items: center; text-align: left; font: inherit; color: var(--text); cursor: pointer;
+  padding: 14px; border-radius: var(--radius); border: 1px solid var(--border); background: var(--surface); box-shadow: var(--shadow);
+  transition: border-color .15s var(--ease), transform .15s var(--ease), box-shadow .15s var(--ease); }
+.feature:hover { border-color: var(--accent); transform: translateY(-1px); }
+.feature.primary { border-color: var(--accent); background: var(--accent-soft); }
+.f-icon { grid-area: icon; width: 22px; height: 22px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.f-title { grid-area: title; font-weight: 650; font-size: 15px; }
+.f-desc { grid-area: desc; color: var(--muted); font-size: 13px; line-height: 1.45; }
+.f-go { grid-area: tag; color: var(--accent); font-weight: 600; font-size: 13px; }
+.f-tag { grid-area: tag; justify-self: start; font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px;
+  background: var(--surface-2); color: var(--muted); }
+.f-tag.optional { background: var(--cant-soft); color: var(--cant); }
+.f-tag.ready { background: var(--pass-soft); color: var(--pass); }
+.f-tag.off { background: var(--fail-soft); color: var(--fail); }
+
+/* A brief highlight on the control a feature card sent you to */
+.spotlight { animation: spot 1.6s var(--ease); }
+@keyframes spot { 0%, 60% { box-shadow: 0 0 0 4px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
 
 /* ---------- Buttons & inputs ---------- */
 .btns { display: flex; gap: 8px; flex-wrap: wrap; }
@@ -119,7 +135,9 @@ section.panel.active { display: block; animation: fade .18s var(--ease); }
 .card h2 { margin-bottom: 10px; }
 .card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
 .card-head h2 { margin: 0; }
-.section-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 26px 0 10px; }
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 26px 0 10px;
+  scroll-margin-top: 84px; }  /* so the sticky step tracker never covers a heading you jumped to */
+html { scroll-behavior: smooth; }
 /* minmax(0, …) lets wide tables scroll inside their card instead of pushing the page sideways */
 .grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
 .grid-memo { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
@@ -230,6 +248,69 @@ mark.bad { background: var(--fail-soft); color: var(--fail); font-weight: 700; p
 @keyframes blink { 50% { opacity: 0; } }
 .empty { color: var(--muted); padding: 8px 0; }
 
+/* ---------- Step tracker (file review) ---------- */
+.stepper { position: sticky; top: 0; z-index: 5; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+  margin: 14px 0 0; padding: 8px 0; background: var(--bg); }
+.step-link { display: flex; gap: 10px; align-items: center; padding: 8px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); text-decoration: none; min-width: 0; }
+.step-link:hover { border-color: var(--accent); }
+.step-link .num { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 12px; font-weight: 700; background: var(--surface-2); color: var(--muted); }
+.step-link b { display: block; font-size: 13.5px; }
+.step-link small { display: block; font-size: 12px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step-link.done .num { background: var(--pass); color: var(--surface); }
+.step-link.done .num::before { content: "✓"; }
+.step-link.done .num { font-size: 0; } .step-link.done .num::before { font-size: 12px; }
+.step-link.attn .num { background: var(--fail); color: var(--surface); }
+.step-link > span:last-child { min-width: 0; }
+.step-link b { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+/* Small phones: number + title only; the status is still in each section below */
+@media (max-width: 600px) { .step-link { padding: 6px 8px; gap: 6px; } .step-link b { font-size: 12px; } .step-link small { display: none; } }
+
+/* ---------- Rule cards: plain question + meter ---------- */
+.q { display: block; font-size: 12.5px; color: var(--muted); font-weight: 400; }
+.rule-main { display: flex; flex-direction: column; min-width: 0; flex: 1 1 200px; }
+.meter { position: relative; display: inline-block; width: 120px; height: 8px; border-radius: 999px; background: var(--fail-soft); flex: none; }
+.meter .zone { position: absolute; top: 0; bottom: 0; background: var(--pass-soft); border-radius: 999px; }
+.meter .limit { position: absolute; top: -4px; bottom: -4px; width: 2px; margin-left: -1px; background: var(--muted); }
+.meter .dot { position: absolute; top: 50%; width: 12px; height: 12px; border-radius: 50%; transform: translate(-50%, -50%);
+  border: 2px solid var(--surface); }
+.meter .dot.s-FAIL { background: var(--fail); } .meter .dot.s-PASS { background: var(--pass); }
+.meter .dot.s-BORDERLINE { background: var(--border-s); } .meter .dot.s-CANT_CHECK { background: var(--cant); }
+.evidence { margin-top: 10px; }
+.evidence > summary { cursor: pointer; font-size: 13px; color: var(--accent); }
+details.passing { margin-top: 12px; }
+details.passing > summary { cursor: pointer; padding: 10px 14px; border-radius: var(--radius); border: 1px dashed var(--border-strong);
+  color: var(--muted); font-size: 13.5px; list-style: none; }
+details.passing > summary::-webkit-details-marker { display: none; }
+
+/* ---------- Memo pipeline ---------- */
+.pipeline { list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0; padding: 0; margin: 0 0 12px; counter-reset: p; }
+.pipeline li { counter-increment: p; position: relative; padding: 8px 12px 8px 34px; font-size: 13px; border: 1px solid var(--border);
+  background: var(--surface); }
+.pipeline li:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+.pipeline li:last-child { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.pipeline li + li { border-left: 0; }
+.pipeline li::before { content: counter(p); position: absolute; left: 10px; top: 9px; width: 18px; height: 18px; border-radius: 50%;
+  display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--surface-2); color: var(--muted); }
+.pipeline li b { display: block; font-weight: 600; }
+.pipeline li small { display: block; color: var(--muted); font-size: 12px; }
+.pipeline li.on::before { background: var(--accent); color: var(--on-accent); }
+.pipeline li.skipped { opacity: .55; }
+.pipeline li.good::before { background: var(--pass); color: var(--surface); content: "✓"; }
+.pipeline li.bad::before { background: var(--fail); color: var(--surface); content: "✕"; }
+@media (max-width: 600px) { .pipeline { grid-template-columns: minmax(0, 1fr); } .pipeline li + li { border-left: 1px solid var(--border); border-top: 0; }
+  .pipeline li:first-child, .pipeline li:last-child { border-radius: 0; } }
+.seg-tag { font-size: 10.5px; opacity: .75; margin-left: 4px; }
+
+/* ---------- Toast ---------- */
+.toast { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 20; max-width: calc(100vw - 32px);
+  padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 500; background: var(--text); color: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .2); animation: rise .2s var(--ease); }
+.toast.good::before { content: "✓  "; color: var(--pass); }
+.toast.bad::before { content: "✕  "; color: var(--fail); }
+@keyframes rise { from { opacity: 0; transform: translate(-50%, 6px); } to { opacity: 1; transform: translate(-50%, 0); } }
+
 /* ---------- About dialog ---------- */
 dialog { border: 1px solid var(--border); border-radius: 16px; padding: 0; width: min(720px, calc(100vw - 32px));
   max-height: calc(100vh - 48px); background: var(--surface); color: var(--text); box-shadow: 0 20px 60px rgba(0, 0, 0, .25); }
@@ -270,18 +351,33 @@ footer { padding: 24px 0 40px; color: var(--muted); font-size: 13px; border-top:
 <main class="wrap" id="main">
   <section class="hero" aria-labelledby="hero-title">
     <h1 id="hero-title">Catch policy breaks and wrong numbers before a credit memo reaches the reviewer.</h1>
-    <p>Code checks every rule in the lender's own policy, a small AI running in your browser rewords the memo, and code checks
-      every figure it wrote. Twelve made-up loan files are loaded, so you can try it straight away.</p>
-    <div class="btns hero-cta">
-      <button class="btn primary lg" id="cta-review" type="button">Review a flagged loan file →</button>
-      <button class="btn lg" id="cta-book" type="button">See all 12 files</button>
+    <p>12 made-up loan files are loaded. Pick where to start:</p>
+    <div class="features">
+      <button class="feature primary" type="button" data-go="review">
+        <svg class="f-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5 21 21"/></svg>
+        <span class="f-title">Review a flagged file</span>
+        <span class="f-desc">See what breaks the policy and where each number came from.</span>
+        <span class="f-go">Start here →</span>
+      </button>
+      <button class="feature" type="button" data-go="whatif">
+        <svg class="f-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg>
+        <span class="f-title">Test a policy change</span>
+        <span class="f-desc">Tighten the rules and see which loans drop out.</span>
+        <span class="f-tag">Core</span>
+      </button>
+      <button class="feature" type="button" data-go="ai">
+        <svg class="f-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5 18 18M18 6l-2.5 2.5M8.5 15.5 6 18"/></svg>
+        <span class="f-title">Let AI word the memo</span>
+        <span class="f-desc">A small model runs in your browser. Code checks every figure.</span>
+        <span class="f-tag optional" id="ai-feature-status">Optional · 290 MB download</span>
+      </button>
+      <button class="feature" type="button" data-go="break">
+        <svg class="f-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 1.7 3h10.6a2 2 0 0 0 1.7-3l-5-9V3"/><path d="M7.5 15h9"/></svg>
+        <span class="f-title">Try to fool the checker</span>
+        <span class="f-desc">Plant a wrong number and watch the memo get blocked.</span>
+        <span class="f-tag">Core</span>
+      </button>
     </div>
-    <ol class="flow" aria-label="How it works">
-      <li><b>Code reads</b><span>each figure, with its source page</span></li>
-      <li><b>Code decides</b><span>pass, fail, borderline or can't check</span></li>
-      <li><b>AI rewords</b><span>the memo, never typing a number</span></li>
-      <li><b>Code checks</b><span>figures, meaning and outcome</span></li>
-    </ol>
   </section>
 
   <div class="tabs" role="tablist" aria-label="Sections">
@@ -339,20 +435,31 @@ footer { padding: 24px 0 40px; color: var(--muted); font-size: 13px; border-top:
       <details class="spoiler"><summary>What was planted in this file (spoiler)</summary><p id="planted"></p></details>
     </div>
 
-    <div class="section-head"><h2>1 · Check these first</h2><span class="muted small" id="progress-note"></span></div>
+    <nav class="stepper" aria-label="Review steps">
+      <a href="#step-checks" class="step-link" id="st-1"><span class="num">1</span><span><b>Check the rules</b><small id="st-1-s"></small></span></a>
+      <a href="#step-memo" class="step-link" id="st-2"><span class="num">2</span><span><b>Credit memo</b><small id="st-2-s"></small></span></a>
+      <a href="#step-log" class="step-link" id="st-3"><span class="num">3</span><span><b>Audit log</b><small id="st-3-s"></small></span></a>
+    </nav>
+
+    <div class="section-head" id="step-checks"><h2>1 · Check the rules <span class="muted small" style="font-weight:400">problems first</span></h2><span class="muted small" id="progress-note"></span></div>
     <div id="queue"></div>
 
-    <div class="section-head"><h2>2 · Credit memo</h2>
+    <div class="section-head" id="step-memo"><h2>2 · Credit memo</h2>
       <div class="seg" role="group" aria-label="Who writes the memo">
         <button data-writer="template" aria-pressed="true" type="button">Code template</button>
-        <button data-writer="ai" aria-pressed="false" type="button">On-device AI</button>
+        <button data-writer="ai" aria-pressed="false" type="button">On-device AI <span class="seg-tag">optional</span></button>
       </div>
     </div>
+    <ol class="pipeline" id="pipeline" aria-label="How this memo is made">
+      <li id="pl-1"><b>Code writes the outline</b></li>
+      <li id="pl-2"><b>AI rewords it</b><small id="pl-2-s"></small></li>
+      <li id="pl-3"><b>Code checks it</b><small id="pl-3-s"></small></li>
+    </ol>
     <div class="card ai-box" id="ai-box" hidden>
       <div class="row">
         <select id="model" aria-label="AI model"></select>
-        <button class="btn" id="load-model" type="button">Load model</button>
-        <button class="btn primary" id="write-ai" type="button" disabled>Write memo</button>
+        <button class="btn" id="load-model" type="button">1 · Load model</button>
+        <button class="btn primary" id="write-ai" type="button" disabled>2 · Write memo</button>
       </div>
       <div class="progress" id="progress" hidden><div></div></div>
       <p class="muted small" id="ai-status" role="status" aria-live="polite"></p>
@@ -376,7 +483,7 @@ footer { padding: 24px 0 40px; color: var(--muted); font-size: 13px; border-top:
       </div>
     </div>
 
-    <div class="section-head"><h2>3 · Audit log</h2><span class="muted small">Saved in this browser</span></div>
+    <div class="section-head" id="step-log"><h2>3 · Audit log</h2><span class="muted small">Saved in this browser</span></div>
     <div class="card"><div id="audit"></div></div>
   </section>
 
@@ -461,6 +568,8 @@ footer { padding: 24px 0 40px; color: var(--muted); font-size: 13px; border-top:
       <a href="https://github.com/sanyamgaur/credit-policy-desk" target="_blank" rel="noopener">Code on GitHub ↗</a></p>
   </div>
 </dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
 <footer>
   <div class="wrap">
@@ -959,9 +1068,56 @@ MEMO:
       if (d) { e.preventDefault(); showTab(tabButtons[(i + d + tabButtons.length) % tabButtons.length].dataset.tab, true); }
     });
   });
-  const goToTabs = () => document.querySelector(".tabs").scrollIntoView({ behavior: "smooth", block: "start" });
-  $("cta-review").addEventListener("click", () => { current = attentionOrder(evalAll(policy))[0].borrower.id; showTab("review"); goToTabs(); });
-  $("cta-book").addEventListener("click", () => { showTab("book"); goToTabs(); });
+  const reduceMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const scrollToEl = (el) => el.scrollIntoView({ behavior: reduceMotion() ? "auto" : "smooth", block: "start" });
+  const goToTabs = () => scrollToEl(document.querySelector(".tabs"));
+  // Briefly outline the control a feature card sent the user to, so they see where to act.
+  function spotlight(el) {
+    el.classList.remove("spotlight"); void el.offsetWidth; el.classList.add("spotlight");
+    setTimeout(() => el.classList.remove("spotlight"), 1700);
+  }
+  function openFirstFlagged() { current = attentionOrder(evalAll(policy))[0].borrower.id; showTab("review"); }
+
+  // ---------------- Feature cards: each one opens the exact place to use that feature ----------------
+  document.querySelectorAll("[data-go]").forEach((card) => card.addEventListener("click", () => {
+    const go = card.dataset.go;
+    if (go === "review") { openFirstFlagged(); goToTabs(); }
+    if (go === "whatif") {
+      showTab("book");
+      const btn = document.querySelector('[data-preset="tight"]');
+      scrollToEl(document.querySelector("#tab-book .policy"));
+      btn.focus({ preventScroll: true }); spotlight(btn);
+    }
+    if (go === "ai") {
+      openFirstFlagged();
+      document.querySelector('[data-writer="ai"]').click();
+      scrollToEl($("step-memo"));
+      const target = !navigator.gpu ? $("ai-box") : llm ? $("write-ai") : $("load-model");
+      if (target.focus) target.focus({ preventScroll: true });
+      spotlight(target);
+    }
+    if (go === "break") {
+      openFirstFlagged();
+      scrollToEl($("step-memo"));
+      $("plant").focus({ preventScroll: true }); spotlight($("plant"));
+    }
+  }));
+
+  // ---------------- Toast: short confirmation after an action ----------------
+  let toastTimer = null;
+  function toast(msg, kind = "") {
+    const t = $("toast");
+    t.hidden = true; t.className = `toast ${kind}`; t.textContent = msg; void t.offsetWidth; t.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { t.hidden = true; }, 2800);
+  }
+
+  // ---------------- AI feature status, shown on its card ----------------
+  function setAiFeature(text, cls) {
+    const tag = $("ai-feature-status");
+    tag.textContent = text; tag.className = `f-tag ${cls}`;
+  }
+  if (!navigator.gpu) setAiFeature("Not available in this browser", "off");
 
   // ---------------- About dialog ----------------
   const about = $("about");
@@ -982,6 +1138,7 @@ MEMO:
       if (!Number.isFinite(v) || v < 0) return;   // ignore half-typed or negative limits
       policy.rules[+inp.dataset.i].threshold = v;
       renderPortfolio();
+      announcePolicy(600);
     }));
     markEdited();
   }
@@ -990,6 +1147,7 @@ MEMO:
     if (!Number.isFinite(v) || v < 0 || v > 25) return;
     policy.borderline_margin_pct = v;
     renderPortfolio();
+    announcePolicy(600);
   });
   document.querySelectorAll("[data-preset]").forEach((btn) => btn.addEventListener("click", () => {
     policy = clone(ORIGINAL);
@@ -997,7 +1155,18 @@ MEMO:
     if (p) policy.rules.forEach((r) => { if (r.id in p) r.threshold = p[r.id]; });
     renderPolicyRows();
     renderPortfolio();
+    announcePolicy(0);
   }));
+  // Confirms a policy change and says how many files it moved (debounced while typing).
+  let policyTimer = null;
+  function announcePolicy(delay) {
+    clearTimeout(policyTimer);
+    policyTimer = setTimeout(() => {
+      if (!policyEdited()) { toast("Back to the original policy", "good"); return; }
+      const moved = evalAll(policy).filter((ev, i) => ev.recommendation.code !== BASE[i].recommendation.code).length;
+      toast(`Policy updated · ${moved} file${moved === 1 ? "" : "s"} changed outcome`, "good");
+    }, delay);
+  }
   $("sort-attention").addEventListener("change", () => renderPortfolio());
   function markEdited() {
     policy.rules.forEach((r, i) => {
@@ -1074,8 +1243,8 @@ MEMO:
 
     const flagged = q.filter((r) => r.status !== "PASS"), passing = q.filter((r) => r.status === "PASS");
     $("queue").innerHTML = (flagged.length ? flagged.map((r) => ruleCard(r, true)).join("")
-      : `<div class="ok">Nothing to check first: every rule passes comfortably.</div>`)
-      + (passing.length ? `<p class="passing-head">Passing rules (${passing.length})</p>` + passing.map((r) => ruleCard(r, false)).join("") : "");
+      : `<div class="ok">Nothing to check: every rule passes comfortably. Go to the memo below.</div>`)
+      + (passing.length ? `<details class="passing"><summary>✓ ${passing.length} rules pass · show them</summary>${passing.map((r) => ruleCard(r, false)).join("")}</details>` : "");
     $("queue").querySelectorAll("[data-rid]").forEach(wireDecision);
     renderProgress();
     renderMemo();
@@ -1084,19 +1253,42 @@ MEMO:
 
   const edited = (r) => ORIGINAL.rules.find((o) => o.id === r.id).threshold !== r.threshold;
 
+  // Each rule as a plain question, so nobody needs to know what "DSCR" means to follow along.
+  const QUESTION = {
+    R1: "Has the business run long enough?", R2: "Does the owner have a good credit record?",
+    R3: "Any recent late repayments?", R4: "Can profit cover all loan repayments?",
+    R5: "Is total debt manageable for its profit?", R6: "Can it pay its short-term bills?",
+    R7: "Do tax-reported sales match audited revenue?", R8: "Does the bank account show the sales it reports?",
+    R9: "Any bounced payments recently?", R10: "Are all required documents in?",
+  };
+
+  // A small gauge: green = allowed zone, line = the limit, dot = this borrower.
+  function meter(r) {
+    if (typeof r.value !== "number" || r.op === "==") return "";
+    const v = r.value, lim = r.threshold;
+    const lo = Math.min(v, lim) * 0.5, hi = Math.max(v, lim) * 1.3 || 1;
+    const pct = (x) => Math.max(0, Math.min(100, ((x - lo) / (hi - lo)) * 100));
+    const zone = r.op === ">=" ? `left:${pct(lim)}%;right:0` : `left:0;width:${pct(lim)}%`;
+    return `<span class="meter" role="img" aria-label="${esc(r.short)} ${esc(r.value_display)}, limit ${esc(r.threshold_display)}">
+      <span class="zone" style="${zone}"></span><span class="limit" style="left:${pct(lim)}%"></span><span class="dot s-${r.status}" style="left:${pct(v)}%"></span></span>`;
+  }
+
   function ruleCard(r, open) {
     const d = decisions[decisionKey(r.id)];
     const inputs = r.inputs.length ? `<div class="table-wrap"><table><thead><tr><th>Input</th><th>Value</th><th>Where it came from</th></tr></thead><tbody>${
       r.inputs.map((i) => `<tr><td>${esc(i.label)}</td><td>${esc(typeof i.value === "number" ? CAM.fmt(i.value, i.unit) : i.value)}</td><td>${esc(i.source)}</td></tr>`).join("")}</tbody></table></div>` : "";
     const decide = r.status === "PASS" ? "" : `<div class="decide" data-rid="${r.id}">
-      <div><label for="dec-${r.id}">Reviewer decision</label><select id="dec-${r.id}">${DECISIONS.map((x) => `<option ${d && x === d.decision ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
+      <div><label for="dec-${r.id}">Your decision</label><select id="dec-${r.id}">${DECISIONS.map((x) => `<option ${d && x === d.decision ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
       <div><label for="why-${r.id}">Reason (needed for any override)</label><input id="why-${r.id}" type="text" value="${esc(d ? d.reason : "")}" placeholder="e.g. Promoter brought in Rs 40 lakh fresh equity"></div>
-      <div class="err" hidden style="grid-column:1/-1">An override needs a written reason. Nothing is recorded until you add one.</div></div>`;
+      <div class="err" hidden style="grid-column:1/-1">Add a reason to record this override.</div></div>`;
+    const calc = r.how ? `<p class="small"><b>How it's worked out:</b> <code>${esc(r.how)}</code> = <b>${esc(r.value_display)}</b></p>` : "";
     return `<details class="rule" ${open ? "open" : ""}><summary><span class="cell s-${r.status}" aria-hidden="true">${ICON[r.status]}</span>
-      <span class="title">${r.id} · ${esc(r.short)}</span><span class="badge s-${r.status}">${esc(CAM.STATUS_LABEL[r.status])}</span>
-      <span class="val">${esc(r.value_display)} · policy: ${esc(r.threshold_display)}</span>${d ? `<span class="decided" id="done-${r.id}">✓ decided</span>` : `<span class="decided" id="done-${r.id}"></span>`}</summary>
-      <div class="body"><p><b>Rule:</b> ${esc(r.text)}${edited(r) ? ` <span class="badge" style="background:var(--accent-soft);color:var(--accent)">Edited: now ${esc(r.threshold_display)}</span>` : ""}</p>${r.reason ? `<div class="warn">${esc(r.reason)}</div>` : ""}
-      ${inputs}${r.how ? `<p><b>Calculation:</b> <code>${esc(r.how)}</code> = <b>${esc(r.value_display)}</b></p>` : ""}${decide}</div></details>`;
+      <span class="rule-main"><span class="title">${esc(r.short)} <span class="badge s-${r.status}">${esc(CAM.STATUS_LABEL[r.status])}</span></span><span class="q">${esc(QUESTION[r.id] || r.text)}</span></span>
+      <span class="val">${esc(r.value_display)} <span class="muted">· limit ${esc(r.threshold_display)}</span></span>${meter(r)}
+      <span class="decided" id="done-${r.id}">${d ? "✓ decided" : ""}</span></summary>
+      <div class="body">${r.reason ? `<div class="warn">${esc(r.reason)}</div>` : ""}${edited(r) ? `<p class="note small">Limit edited in Loan book: now ${esc(r.threshold_display)}.</p>` : ""}
+      ${decide}${calc}
+      <details class="evidence"><summary>Where the numbers came from${r.inputs.length ? ` (${r.inputs.length})` : ""}</summary><p class="small"><b>Policy rule (${r.id}):</b> ${esc(r.text)}</p>${inputs}</details></div></details>`;
   }
 
   function wireDecision(box) {
@@ -1104,6 +1296,7 @@ MEMO:
     const ev = CAM.evaluate(byId(current), policy), r = ev.results.find((x) => x.id === rid);
     const update = () => {
       const key = decisionKey(rid);
+      const wasSaved = !!decisions[key];
       const missingReason = sel.value.startsWith("Override") && !txt.value.trim();
       err.hidden = !missingReason;
       if (missingReason || sel.value === DECISIONS[0]) delete decisions[key];   // overrides need a reason
@@ -1111,6 +1304,8 @@ MEMO:
         value: r.value_display, policy: policyVersion(), at: new Date().toISOString() };
       saveDecisions();
       $(`done-${rid}`).textContent = decisions[key] ? "✓ decided" : "";
+      if (!wasSaved && decisions[key]) toast("Decision saved to the audit log", "good");
+      if (wasSaved && !decisions[key]) toast(missingReason ? "Not recorded: an override needs a reason" : "Decision removed", missingReason ? "bad" : "");
       renderProgress();
       renderAudit();
     };
@@ -1123,6 +1318,21 @@ MEMO:
     const flagged = ev.results.filter((r) => r.status !== "PASS");
     const done = flagged.filter((r) => decisions[decisionKey(r.id)]).length;
     $("progress-note").textContent = flagged.length ? `${done} of ${flagged.length} flagged rules decided` : "";
+    updateStepper();
+  }
+
+  // Step tracker: shows where the reviewer is and what's left, without reading the page.
+  let memoState = "none";   // "none" | "passed" | "blocked"
+  function updateStepper() {
+    const ev = CAM.evaluate(byId(current), policy);
+    const flagged = ev.results.filter((r) => r.status !== "PASS");
+    const done = flagged.filter((r) => decisions[decisionKey(r.id)]).length;
+    const set = (id, text, cls) => { $(id).className = `step-link ${cls}`; $(`${id}-s`).textContent = text; };
+    set("st-1", flagged.length ? `${done} of ${flagged.length} flagged decided` : "Nothing flagged", done === flagged.length ? "done" : "");
+    set("st-2", memoState === "passed" ? "Passed the checks" : memoState === "blocked" ? "Blocked by the checks" : "Not written yet",
+      memoState === "passed" ? "done" : memoState === "blocked" ? "attn" : "");
+    const n = Object.values(decisions).filter((d) => d.file === current).length;
+    set("st-3", n ? `${n} entr${n === 1 ? "y" : "ies"} for this file` : "No entries yet", n ? "done" : "");
   }
 
   function renderAudit() {
@@ -1130,7 +1340,8 @@ MEMO:
     $("audit").innerHTML = rows.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th>File</th><th>Rule</th><th>Value then</th><th>Decision</th><th>Reason</th><th>Policy</th></tr></thead><tbody>${
       rows.map((r) => `<tr><td>${esc(new Date(r.at).toLocaleString())}</td><td>${esc(r.file)}</td><td>${esc(r.rule)}</td><td>${esc(r.value)}</td><td>${esc(r.decision)}</td><td>${esc(r.reason)}</td><td>${esc(r.policy)}</td></tr>`).join("")}</tbody></table></div>
       <div class="btns" style="margin-top:10px"><button class="btn small" id="dl-audit" type="button">Download CSV</button><button class="btn small ghost" id="clear-audit" type="button">Clear log</button></div>`
-      : `<p class="empty">No decisions yet. Choose a decision on any flagged rule above and it's recorded here with the time, the value at that moment and the policy version.</p>`;
+      : `<p class="empty">No decisions yet. Make one on a flagged rule above and it's recorded here.</p>`;
+    updateStepper();
     if (!rows.length) return;
     $("dl-audit").addEventListener("click", () => {
       // Quote every cell, and stop spreadsheet apps running text that starts like a formula.
@@ -1139,12 +1350,14 @@ MEMO:
         ...rows.map((r) => [r.at, r.file, r.rule, r.value, r.decision, r.reason, r.policy].map(q).join(","))].join("\n");
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: "audit_log.csv" });
       a.click();
+      toast("Audit log downloaded", "good");
     });
     $("clear-audit").addEventListener("click", () => {
       if (!confirm("Clear every recorded decision from this browser?")) return;
       Object.keys(decisions).forEach((k) => delete decisions[k]);
       saveDecisions();
       renderReview();
+      toast("Audit log cleared");
     });
   }
 
@@ -1161,6 +1374,7 @@ MEMO:
     $("plant").setAttribute("aria-pressed", plant);
     $("plant").textContent = plant ? "Remove the planted number" : "Test the checker: plant a wrong number";
     renderMemoOutput();
+    toast(plant ? "Wrong number planted: the checks block the memo" : "Planted number removed", plant ? "bad" : "good");
   });
   $("load-model").addEventListener("click", () => ensureModel().catch(showAiError));
   $("write-ai").addEventListener("click", () => writeAiMemo(current).catch(showAiError));
@@ -1235,6 +1449,7 @@ MEMO:
         <button class="btn small" type="button" id="use-template">Use the code template instead</button>`;
       $("use-template").addEventListener("click", () => document.querySelector('[data-writer="template"]').click());
       $("memo-checks").innerHTML = `<p class="empty">Checks run as soon as there's a memo.</p>`;
+      memoState = "none"; renderPipeline("", null, false); updateStepper();
       return;
     }
     let plantNote = "";
@@ -1245,7 +1460,7 @@ MEMO:
     }
     const c = CAM.checkMemo(text, ev, policy);
     $("memo-text").innerHTML = renderMemoMarkdown(text, c.unmatched.map((n) => n.number), streaming);
-    if (streaming) { $("memo-checks").innerHTML = `<p class="empty">Waiting for the model to finish…</p>`; return; }
+    if (streaming) { $("memo-checks").innerHTML = `<p class="empty">Waiting for the model to finish…</p>`; renderPipeline(text, c, true); return; }
     const okN = c.numbers.filter((n) => n.ok).length;
     const line = (ok, title, body, items) => `<div class="check-line"><span class="ic" aria-hidden="true">${ok ? "✅" : "❌"}</span><div><b>${title}</b> ${body}${items || ""}</div></div>`;
     $("memo-checks").innerHTML = plantNote
@@ -1259,6 +1474,26 @@ MEMO:
         c.decisionConflicts.map((x) => `<div class="err">${esc(x.why)}.<br><small>${esc(x.sentence)}</small></div>`).join(""))
       + (c.placeholders.length ? line(false, "Unfilled placeholders:", esc(c.placeholders.join(", "))) : "")
       + (c.passed ? `<div class="ok">Passed every check. Ready for the reviewer.</div>` : `<div class="err">Blocked. Fix the flagged items before it reaches the reviewer.</div>`);
+    memoState = c.passed ? "passed" : "blocked";
+    renderPipeline(text, c, false);
+    updateStepper();
+  }
+
+  const modelName = (id) => MODELS.find((m) => m[0] === id)[1].split(" · ").slice(0, 2).join(" ");
+
+  // The 3-step strip above the memo: who did what to this memo, and the result.
+  function renderPipeline(text, c, streaming) {
+    const meta = aiMeta[sourceKey()];
+    $("pl-1").className = "on";
+    if (writer === "template") {
+      $("pl-2").className = "skipped"; $("pl-2-s").textContent = "Skipped: code template";
+    } else {
+      $("pl-2").className = text ? "on" : "";
+      $("pl-2-s").textContent = streaming ? "Writing…" : meta ? `${modelName(meta.model)} · ${meta.tries} ${meta.tries === 1 ? "try" : "tries"}`
+        : llm ? "Ready: click Write memo" : "Load the model first";
+    }
+    $("pl-3").className = !text || streaming ? "" : c.passed ? "good" : "bad";
+    $("pl-3-s").textContent = !text ? "Waiting for a memo" : streaming ? "Runs when writing ends" : c.passed ? "Passed" : "Blocked";
   }
 
   // ---------------- On-device AI (WebLLM) ----------------
@@ -1266,9 +1501,11 @@ MEMO:
     $("progress").hidden = false;
     $("progress").firstElementChild.style.width = `${Math.round(frac * 100)}%`;
     $("ai-status").textContent = text;
+    if (frac < 1) setAiFeature(`Loading · ${Math.round(frac * 100)}%`, "optional");
   }
   function showAiError(e) {
     busy = false;
+    setAiFeature("Couldn't load · template still works", "off");
     $("load-model").disabled = false;
     $("ai-status").innerHTML = `<span style="color:var(--fail)">${esc(e.message || e)}</span> You can keep using the code template.`;
   }
@@ -1284,6 +1521,8 @@ MEMO:
     llm = await webllm.CreateMLCEngine(id, { initProgressCallback: (r) => setProgress(r.progress || 0, r.text || "") });
     llmModel = id;
     setProgress(1, `Ready: ${MODELS.find((m) => m[0] === id)[1]} is running on this device.`);
+    setAiFeature("Ready · runs on this device", "ready");
+    toast("AI model ready. It runs on this device.", "good");
     $("load-model").disabled = false; $("write-ai").disabled = false;
     renderMemoOutput();
   }
@@ -1333,6 +1572,7 @@ MEMO:
       $("ai-status").textContent = r.check.passed
         ? `Passed every check${r.tries > 1 ? ` on try ${r.tries} of ${MAX_TRIES}` : " on the first try"}.`
         : `All ${MAX_TRIES} tries were blocked. The last draft is shown so you can see why. Use the code template, or try again.`;
+      toast(r.check.passed ? "AI memo passed every check" : `AI memo blocked after ${MAX_TRIES} tries`, r.check.passed ? "good" : "bad");
     } finally {
       busy = false; $("write-ai").disabled = false;
     }
