@@ -4,152 +4,173 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Credit Policy Desk</title>
-<meta name="description" content="Checks loan files against a lender's own credit policy. Code decides, AI writes, code checks. Runs entirely in your browser.">
+<meta name="description" content="Checks loan files against a lender's own credit policy. Code decides, AI rewords the memo, code checks every figure. Runs entirely in your browser.">
 <style>
 /*__STYLE__*/
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap top-inner">
-    <div class="brand"><div class="mark">✓</div>Credit Policy Desk</div>
+    <div class="brand"><div class="mark" aria-hidden="true">✓</div>Credit Policy Desk</div>
     <div class="pills">
       <span class="pill good">Runs in your browser</span>
       <span class="pill good">No API key</span>
       <span class="pill">Made-up data</span>
     </div>
+    <button class="btn ghost" id="open-about" type="button">About this project</button>
   </div>
 </header>
 
-<main class="wrap">
-  <div class="hero">
-    <h1>Check loan files against the lender's own policy, before the memo reaches a reviewer.</h1>
-    <p>AI can draft a credit memo in minutes. A reviewer still asks two things: <b>does this loan break our policy?</b>
-      and <b>can I trust the numbers?</b> Here, code makes every decision, AI only writes, and code checks what the AI wrote.</p>
-    <div class="flow">
-      <div class="step"><b>1 · Code reads</b><span>Each number, with the document and page it came from</span></div>
-      <div class="arrow">→</div>
-      <div class="step"><b>2 · Code decides</b><span>Every rule: fails, can't check, borderline or passes</span></div>
-      <div class="arrow">→</div>
-      <div class="step"><b>3 · AI rewords</b><span>A small model in your browser puts the memo in plain English</span></div>
-      <div class="arrow">→</div>
-      <div class="step"><b>4 · Code checks</b><span>Every number, citation and the outcome, before a human sees it</span></div>
+<main class="wrap" id="main">
+  <section class="hero" aria-labelledby="hero-title">
+    <h1 id="hero-title">Catch policy breaks and wrong numbers before a credit memo reaches the reviewer.</h1>
+    <p>Code checks every rule in the lender's own policy, a small AI running in your browser rewords the memo, and code checks
+      every figure it wrote. Twelve made-up loan files are loaded, so you can try it straight away.</p>
+    <div class="btns hero-cta">
+      <button class="btn primary lg" id="cta-review" type="button">Review a flagged loan file →</button>
+      <button class="btn lg" id="cta-book" type="button">See all 12 files</button>
     </div>
+    <ol class="flow" aria-label="How it works">
+      <li><b>Code reads</b><span>each figure, with its source page</span></li>
+      <li><b>Code decides</b><span>pass, fail, borderline or can't check</span></li>
+      <li><b>AI rewords</b><span>the memo, never typing a number</span></li>
+      <li><b>Code checks</b><span>figures, meaning and outcome</span></li>
+    </ol>
+  </section>
+
+  <div class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" id="tab-btn-book" aria-controls="tab-book" data-tab="book" aria-selected="true">Loan book</button>
+    <button role="tab" id="tab-btn-review" aria-controls="tab-review" data-tab="review" aria-selected="false" tabindex="-1">File review</button>
+    <button role="tab" id="tab-btn-how" aria-controls="tab-how" data-tab="how" aria-selected="false" tabindex="-1">How well it works</button>
   </div>
 
-  <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="portfolio" aria-selected="true">1 · Policy what-if</button>
-    <button role="tab" data-tab="review" aria-selected="false">2 · Review a file</button>
-    <button role="tab" data-tab="memo" aria-selected="false">3 · Memo + AI check</button>
-    <button role="tab" data-tab="about" aria-selected="false">4 · How well it works</button>
-  </nav>
-
-  <section class="panel active" id="tab-portfolio">
+  <!-- ============ Loan book ============ -->
+  <section class="panel active" id="tab-book" role="tabpanel" aria-labelledby="tab-btn-book">
     <div class="grid-2">
-      <div class="card">
-        <h3>Lender policy</h3>
-        <p class="muted" style="margin:0 0 8px;font-size:13px">Change a limit and all 12 files re-check instantly.</p>
-        <div id="policy-rows"></div>
-        <div class="rule-row"><label><span class="rid">±</span>Borderline zone <span class="op">(% of limit)</span></label>
-          <input type="number" id="margin" min="0" max="25" step="1"></div>
-        <div class="btns">
-          <button class="btn" data-preset="tight">Downturn: tighten</button>
-          <button class="btn" data-preset="loose">Growth push: loosen</button>
-          <button class="btn" data-preset="reset">Reset</button>
-        </div>
-      </div>
       <div>
         <div class="chips" id="chips"></div>
         <div class="card">
-          <h3>12 loan files × 10 rules <small style="font-weight:400">· click a row to review it</small></h3>
+          <div class="card-head">
+            <h2>12 loan files × 10 policy rules</h2>
+            <label class="toggle small"><input type="checkbox" id="sort-attention" checked> Needs attention first</label>
+          </div>
           <div class="table-wrap"><table class="port" id="port"></table></div>
           <div class="legend">
-            <span><i class="cell s-FAIL">✕</i>Fails</span><span><i class="cell s-CANT_CHECK">?</i>Can't check</span>
-            <span><i class="cell s-BORDERLINE">!</i>Borderline</span><span><i class="cell s-PASS">✓</i>Passes</span>
+            <span><i class="cell s-FAIL" aria-hidden="true">✕</i>Fails</span><span><i class="cell s-CANT_CHECK" aria-hidden="true">?</i>Can't check</span>
+            <span><i class="cell s-BORDERLINE" aria-hidden="true">!</i>Borderline</span><span><i class="cell s-PASS" aria-hidden="true">✓</i>Passes</span>
           </div>
         </div>
         <div class="card" id="changes-card">
-          <h3>What changed vs. the original policy</h3>
+          <h2>What changed vs. the original policy</h2>
           <div id="changes"></div>
         </div>
       </div>
+      <aside class="card policy" aria-labelledby="policy-title">
+        <h2 id="policy-title">Policy what-if</h2>
+        <p class="muted small">For the credit-policy head: change a limit and every file re-checks instantly. File review uses this policy too.</p>
+        <div class="btns">
+          <button class="btn" data-preset="tight" type="button">Downturn: tighten</button>
+          <button class="btn" data-preset="loose" type="button">Growth: loosen</button>
+          <button class="btn ghost" data-preset="reset" type="button">Reset</button>
+        </div>
+        <div id="policy-rows"></div>
+        <div class="rule-row"><label for="margin"><span class="rid">±</span>Borderline zone <span class="op">% of limit</span></label>
+          <input type="number" id="margin" min="0" max="25" step="1"></div>
+      </aside>
     </div>
   </section>
 
-  <section class="panel" id="tab-review">
+  <!-- ============ File review ============ -->
+  <section class="panel" id="tab-review" role="tabpanel" aria-labelledby="tab-btn-review">
     <div id="policy-note"></div>
-    <div class="card">
-      <div class="file-head">
-        <div style="flex:0 1 300px"><select id="borrower" aria-label="Choose a loan file"></select></div>
-        <div class="meta" id="file-meta"></div>
+    <div class="card file-bar">
+      <div class="row">
+        <button class="btn icon" id="prev-file" type="button" aria-label="Previous file">←</button>
+        <select id="borrower" aria-label="Choose a loan file"></select>
+        <button class="btn icon" id="next-file" type="button" aria-label="Next file">→</button>
       </div>
-      <details class="spoiler" style="margin-top:10px"><summary>What was planted in this file (spoiler)</summary><p id="planted" style="margin:6px 0 0"></p></details>
+      <div id="file-meta" class="file-meta"></div>
+      <details class="spoiler"><summary>What was planted in this file (spoiler)</summary><p id="planted"></p></details>
     </div>
-    <h3 style="margin:18px 0 0">Check these first</h3>
+
+    <div class="section-head"><h2>1 · Check these first</h2><span class="muted small" id="progress-note"></span></div>
     <div id="queue"></div>
-    <div class="card" style="margin-top:18px">
-      <h3>Audit log</h3>
-      <div id="audit"></div>
+
+    <div class="section-head"><h2>2 · Credit memo</h2>
+      <div class="seg" role="group" aria-label="Who writes the memo">
+        <button data-writer="template" aria-pressed="true" type="button">Code template</button>
+        <button data-writer="ai" aria-pressed="false" type="button">On-device AI</button>
+      </div>
     </div>
+    <div class="card ai-box" id="ai-box" hidden>
+      <div class="row">
+        <select id="model" aria-label="AI model"></select>
+        <button class="btn" id="load-model" type="button">Load model</button>
+        <button class="btn primary" id="write-ai" type="button" disabled>Write memo</button>
+      </div>
+      <div class="progress" id="progress" hidden><div></div></div>
+      <p class="muted small" id="ai-status" role="status" aria-live="polite"></p>
+    </div>
+    <div class="grid-memo">
+      <div class="card">
+        <div class="card-head">
+          <span class="provenance" id="provenance"></span>
+          <div class="btns tight">
+            <button class="btn small" id="edit-memo" type="button">Edit</button>
+            <button class="btn small ghost" id="reset-memo" type="button" hidden>Undo edits</button>
+          </div>
+        </div>
+        <div class="memo" id="memo-text"></div>
+        <textarea id="memo-editor" class="memo-editor" hidden aria-label="Edit memo text"></textarea>
+      </div>
+      <div class="card checks">
+        <h3>Checks on this memo <small class="muted">(code, not AI)</small></h3>
+        <div id="memo-checks" role="status" aria-live="polite"></div>
+        <button class="btn small ghost" id="plant" type="button" aria-pressed="false">Test the checker: plant a wrong number</button>
+      </div>
+    </div>
+
+    <div class="section-head"><h2>3 · Audit log</h2><span class="muted small">Saved in this browser</span></div>
+    <div class="card"><div id="audit"></div></div>
   </section>
 
-  <section class="panel" id="tab-memo">
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <div class="row">
-          <span class="muted" style="font-size:13px">Memo for</span>
-          <select id="memo-borrower" style="width:auto"></select>
-        </div>
-        <div class="seg" role="group" aria-label="Who writes the memo">
-          <button data-writer="template" aria-pressed="true">Template (instant)</button>
-          <button data-writer="ai" aria-pressed="false">On-device AI</button>
-        </div>
-      </div>
-      <div class="ai-box" id="ai-box" hidden>
-        <div class="row">
-          <select id="model" style="width:auto"></select>
-          <button class="btn" id="load-model">Load model</button>
-          <button class="btn primary" id="write-ai" disabled>Write memo</button>
-        </div>
-        <div class="progress" id="progress" hidden><div></div></div>
-        <p class="muted" id="ai-status" style="font-size:13px;margin:8px 0 0"></p>
-      </div>
-      <label class="toggle" style="margin-top:12px"><input type="checkbox" id="plant"> Demo: plant a wrong number in the memo, to see the check catch it</label>
-    </div>
-    <div class="grid-memo" style="margin-top:14px">
-      <div class="card"><div class="memo" id="memo-text"></div></div>
-      <div class="card"><h3>Checks on this memo (code, not AI)</h3><div id="memo-checks"></div></div>
-    </div>
-  </section>
-
-  <section class="panel" id="tab-about">
+  <!-- ============ How well it works ============ -->
+  <section class="panel" id="tab-how" role="tabpanel" aria-labelledby="tab-btn-how">
     <div class="grid-memo">
       <div>
         <div class="card">
-          <h3>Rule engine vs. answers written by hand</h3>
+          <h2>Rule engine vs. answers written by hand</h2>
           <div id="eval-rules"></div>
         </div>
         <div class="card">
-          <h3>AI memo test (runs on this device)</h3>
-          <p style="margin-top:0">Code writes an outline of each memo and decides what goes where. The on-device model only rewords it in
-            plainer English; it never types a number. Code fills the figures back in and checks the result. A wrong figure, a sentence
-            that contradicts a rule's result, a sentence with no source, or a changed outcome is blocked, and the model gets up to
-            3 tries. The table shows how often it needed more than one.</p>
-          <div class="row"><button class="btn primary" id="run-ai-test">Run AI test on 12 files</button>
-            <span class="muted" id="ai-test-status" style="font-size:13px"></span></div>
-          <div id="ai-test" style="margin-top:10px"></div>
+          <h2>AI memo test (runs on this device)</h2>
+          <p>Code writes an outline of each memo and decides what goes where. The on-device model only rewords it in plainer
+            English; it never types a number. Code fills the figures back in and checks the result. A blocked draft gets up to
+            3 tries. This test runs all 12 files and reports what happened.</p>
+          <div class="row"><button class="btn primary" id="run-ai-test" type="button">Run AI test on 12 files</button>
+            <span class="muted small" id="ai-test-status" role="status" aria-live="polite"></span></div>
+          <div id="ai-test"></div>
         </div>
       </div>
       <div>
         <div class="card">
-          <h3>Why the AI runs in the browser</h3>
-          <p style="margin-top:0">Borrower files hold bank statements and tax data. Here the model is downloaded once and runs on this
-            device through WebGPU, so no file leaves the laptop and no API key is needed. Code, not the model, decides every result,
-            so a small model is enough: its job is only to write.</p>
-          <p class="muted" style="font-size:13px">Model: open-source, via WebLLM. Needs a browser with WebGPU (recent Chrome or Edge on desktop).</p>
+          <h2>Tested in the code</h2>
+          <p>The repository has automated tests that run the same checks in Python and JavaScript, including 11 "attack" memos
+            written to fool the checker (a rounded number hiding a failure, the right number with the wrong meaning, a memo
+            recommending approval for a loan outside policy). Run them with <code>python3 tests/run_tests.py</code>.</p>
+          <p><a href="https://github.com/sanyamgaur/credit-policy-desk" target="_blank" rel="noopener">View the code on GitHub ↗</a></p>
         </div>
         <div class="card">
-          <h3>Terms used here</h3>
+          <h2>Why the AI runs in the browser</h2>
+          <p>Borrower files hold bank statements and tax data. The model downloads once and runs on this device through
+            WebGPU, so no file leaves the laptop and no API key is needed. Code, not the model, decides every result, so a small
+            model is enough.</p>
+          <p class="muted small">Needs a browser with WebGPU (recent Chrome or Edge on a desktop). Everything else works in any browser.</p>
+        </div>
+        <div class="card">
+          <h2>Terms used here</h2>
           <dl class="glossary" id="glossary"></dl>
         </div>
       </div>
@@ -157,9 +178,48 @@
   </section>
 </main>
 
+<dialog id="about" aria-labelledby="about-title">
+  <form method="dialog" class="about-head"><h2 id="about-title">About this project</h2><button class="btn icon" aria-label="Close">✕</button></form>
+  <div class="about-body">
+    <h3>The problem</h3>
+    <p>AI can draft a credit memo in minutes, but a lender's reviewer still asks two things: does this loan break our own
+      policy, and can I trust the numbers? General AI models are known to make confident mistakes with figures from
+      financial documents, so reviewers end up re-checking everything.</p>
+    <h3>Who it's for</h3>
+    <p><b>Credit reviewers</b> deciding one loan file at a time, and <b>credit-policy heads</b> deciding what the rules should be.</p>
+    <h3>Key product decisions</h3>
+    <ul>
+      <li><b>Code decides, AI only rewords.</b> Every pass or fail comes from code, so the same file always gets the same answer and every result traces to a document page.</li>
+      <li><b>Problems first.</b> Reviewers see failures and missing documents before anything that passes.</li>
+      <li><b>The AI never types a number.</b> Code writes the outline with placeholders, the model rewords it, and code fills the figures back in, then checks figures, meaning and the outcome.</li>
+      <li><b>Overrides need a reason.</b> Approving a broken rule is recorded only with a written reason, in a saved audit log.</li>
+      <li><b>On-device AI.</b> Borrower data never leaves the laptop; no API key or server.</li>
+    </ul>
+    <h3>What I learned by testing</h3>
+    <p>I tried to break my own checker and found 5 ways, including a rounded number hiding a failure and the right number
+      with the wrong meaning. That led to the placeholder design. A 0.5B model also ignored the memo format when asked to
+      write from raw facts, which is why the AI now only rewords a code-written outline.</p>
+    <h3>Honest limits</h3>
+    <ul>
+      <li>All 12 borrowers and the policy are made up and simplified (for example, DSCR uses EBITDA).</li>
+      <li>It starts from clean, structured data. Reading figures from real PDFs, the hardest part, is not built.</li>
+      <li>The meaning check uses word lists, so unusual phrasing can slip past it.</li>
+      <li>No real users have tested it yet.</li>
+    </ul>
+    <h3>Next steps</h3>
+    <p>Talk to five credit analysts; read figures from real documents with a confidence score; add a deviation-approval
+      matrix (which rule break needs which approver).</p>
+    <h3>Built with</h3>
+    <p>Plain HTML, CSS and JavaScript (one file, hosted on GitHub Pages), WebLLM + WebGPU for the on-device model, and a
+      Python version of the same rule engine with automated tests.</p>
+    <!-- Edit this paragraph so it states your own role accurately. -->
+    <p class="muted small">Product direction and decisions: Sanyam Gaur. Built with an AI coding assistant.
+      <a href="https://github.com/sanyamgaur/credit-policy-desk" target="_blank" rel="noopener">Code on GitHub ↗</a></p>
+  </div>
+</dialog>
+
 <footer>
   <div class="wrap">
-    <!-- Edit this line with your name and links -->
     Built by <b>Sanyam Gaur</b> as a product exploration. All borrowers, numbers and the lender policy are made up.
     Not affiliated with any lender or company.
   </div>

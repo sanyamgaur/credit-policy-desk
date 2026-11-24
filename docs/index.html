@@ -4,109 +4,141 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Credit Policy Desk</title>
-<meta name="description" content="Checks loan files against a lender's own credit policy. Code decides, AI writes, code checks. Runs entirely in your browser.">
+<meta name="description" content="Checks loan files against a lender's own credit policy. Code decides, AI rewords the memo, code checks every figure. Runs entirely in your browser.">
 <style>
+/* ---------- Tokens ---------- */
 :root {
-  --bg: #f6f7f9; --surface: #ffffff; --surface-2: #f1f3f6; --border: #e2e5ea;
-  --text: #16191f; --muted: #5d6573; --accent: #2457d6; --accent-soft: #e8eefc;
-  --fail: #c62f2f; --fail-soft: #fdecec; --cant: #c26a00; --cant-soft: #fff3e3;
-  --border-s: #9a7b00; --border-soft: #fff8d6; --pass: #1f8a4c; --pass-soft: #e7f6ee;
-  --shadow: 0 1px 2px rgba(16, 24, 40, .06), 0 1px 3px rgba(16, 24, 40, .08);
-  --radius: 10px;
+  --bg: #f7f8fa; --surface: #ffffff; --surface-2: #f2f4f7; --border: #e3e6eb; --border-strong: #cfd4dc;
+  --text: #121620; --muted: #5b6474; --accent: #2353d0; --accent-soft: #e9effc; --on-accent: #ffffff;
+  --fail: #c0302f; --fail-soft: #fdeded; --cant: #b45f00; --cant-soft: #fff3e2;
+  --border-s: #8a6d00; --border-soft: #fff7d1; --pass: #1d7f47; --pass-soft: #e6f5ec;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .05), 0 1px 3px rgba(16, 24, 40, .07);
+  --radius: 12px; --radius-sm: 8px;
+  --ease: cubic-bezier(.2, .7, .2, 1);
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #0f1115; --surface: #171a21; --surface-2: #1e222b; --border: #2a2f3a;
-    --text: #e8eaef; --muted: #9aa3b2; --accent: #7aa2ff; --accent-soft: #1d2740;
-    --fail: #ff7b7b; --fail-soft: #3a1c1f; --cant: #ffb454; --cant-soft: #3a2a14;
-    --border-s: #f0d264; --border-soft: #353014; --pass: #5fd394; --pass-soft: #143021;
+    --bg: #0e1014; --surface: #161920; --surface-2: #1d2129; --border: #282d37; --border-strong: #353b47;
+    --text: #e9ebf0; --muted: #9aa3b3; --accent: #7ea4ff; --accent-soft: #1b2540; --on-accent: #0b1020;
+    --fail: #ff8080; --fail-soft: #391d20; --cant: #ffb65c; --cant-soft: #382814;
+    --border-s: #efd36a; --border-soft: #332e14; --pass: #63d49a; --pass-soft: #132d20;
     --shadow: none; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
-  --bg: #0f1115; --surface: #171a21; --surface-2: #1e222b; --border: #2a2f3a;
-  --text: #e8eaef; --muted: #9aa3b2; --accent: #7aa2ff; --accent-soft: #1d2740;
-  --fail: #ff7b7b; --fail-soft: #3a1c1f; --cant: #ffb454; --cant-soft: #3a2a14;
-  --border-s: #f0d264; --border-soft: #353014; --pass: #5fd394; --pass-soft: #143021;
+  --bg: #0e1014; --surface: #161920; --surface-2: #1d2129; --border: #282d37; --border-strong: #353b47;
+  --text: #e9ebf0; --muted: #9aa3b3; --accent: #7ea4ff; --accent-soft: #1b2540; --on-accent: #0b1020;
+  --fail: #ff8080; --fail-soft: #391d20; --cant: #ffb65c; --cant-soft: #382814;
+  --border-s: #efd36a; --border-soft: #332e14; --pass: #63d49a; --pass-soft: #132d20;
   --shadow: none; color-scheme: dark;
 }
 
+/* ---------- Base ---------- */
 * { box-sizing: border-box; }
 body {
   margin: 0; background: var(--bg); color: var(--text);
-  font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
 }
-a { color: var(--accent); }
-h1, h2, h3, h4 { line-height: 1.25; margin: 0; }
-small, .muted { color: var(--muted); }
-code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .85em;
-  background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
-
+a { color: var(--accent); text-underline-offset: 2px; }
+h1, h2, h3 { line-height: 1.25; margin: 0; letter-spacing: -.01em; }
+h2 { font-size: 16px; font-weight: 650; }
+h3 { font-size: 14px; font-weight: 650; }
+p { margin: 8px 0; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+code { font: .85em ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--surface-2);
+  padding: 1px 5px; border-radius: 4px; }
 .wrap { max-width: 1240px; margin: 0 auto; padding: 0 16px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+.skip { position: absolute; left: -999px; top: 8px; background: var(--accent); color: var(--on-accent);
+  padding: 8px 12px; border-radius: var(--radius-sm); z-index: 10; }
+.skip:focus { left: 16px; }
 
-/* Header */
+/* ---------- Header & hero ---------- */
 header.top { background: var(--surface); border-bottom: 1px solid var(--border); }
-.top-inner { display: flex; align-items: center; gap: 16px; padding: 14px 0; flex-wrap: wrap; }
-.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 17px; }
-.mark { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: #fff;
-  display: grid; place-items: center; font-size: 15px; }
+.top-inner { display: flex; align-items: center; gap: 12px; padding: 12px 0; flex-wrap: wrap; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 650; font-size: 16px; }
+.mark { width: 26px; height: 26px; border-radius: 7px; background: var(--accent); color: var(--on-accent);
+  display: grid; place-items: center; font-size: 14px; }
 .pills { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
 .pill { font-size: 12px; padding: 3px 9px; border-radius: 999px; background: var(--surface-2);
   color: var(--muted); border: 1px solid var(--border); white-space: nowrap; }
 .pill.good { background: var(--pass-soft); color: var(--pass); border-color: transparent; }
 
-.hero { padding: 26px 0 8px; }
-.hero h1 { font-size: 26px; letter-spacing: -.01em; }
-.hero p { color: var(--muted); max-width: 760px; margin: 8px 0 0; }
-.flow { display: flex; gap: 8px; align-items: stretch; margin-top: 16px; flex-wrap: wrap; }
-.flow .step { flex: 1 1 180px; background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); padding: 10px 12px; box-shadow: var(--shadow); }
-.flow .step b { display: block; font-size: 13px; }
-.flow .step span { font-size: 13px; color: var(--muted); }
-.flow .arrow { align-self: center; color: var(--muted); }
-@media (max-width: 700px) { .flow .arrow { display: none; } }
+.hero { padding: 28px 0 4px; }
+.hero h1 { font-size: clamp(22px, 3.2vw, 30px); max-width: 880px; letter-spacing: -.02em; }
+.hero > p { color: var(--muted); max-width: 760px; font-size: 16px; }
+.hero-cta { margin-top: 16px; }
+.flow { list-style: none; counter-reset: step; display: flex; flex-wrap: wrap; gap: 8px; padding: 0; margin: 20px 0 0; }
+.flow li { counter-increment: step; flex: 1 1 200px; display: flex; gap: 6px; align-items: baseline; font-size: 13px;
+  padding: 8px 12px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
+.flow li::before { content: counter(step); font: 600 11px ui-monospace, Menlo, monospace; color: var(--accent); }
+.flow li b { white-space: nowrap; }
+.flow li span { color: var(--muted); }
 
-/* Tabs */
-nav.tabs { display: flex; gap: 4px; margin: 22px 0 16px; border-bottom: 1px solid var(--border);
-  overflow-x: auto; }
-nav.tabs button { background: none; border: 0; padding: 10px 14px; font: inherit; color: var(--muted);
-  cursor: pointer; border-bottom: 2px solid transparent; white-space: nowrap; }
-nav.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
+/* ---------- Buttons & inputs ---------- */
+.btns { display: flex; gap: 8px; flex-wrap: wrap; }
+.btns.tight { gap: 4px; }
+.btn { font: inherit; font-size: 13.5px; padding: 7px 12px; border-radius: var(--radius-sm); cursor: pointer;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text);
+  transition: background .15s var(--ease), border-color .15s var(--ease), transform .1s var(--ease); }
+.btn:hover { background: var(--surface-2); }
+.btn:active { transform: translateY(1px); }
+.btn.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); font-weight: 600; }
+.btn.primary:hover { filter: brightness(1.07); }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+.btn.ghost:hover { background: var(--surface-2); color: var(--text); }
+.btn.lg { font-size: 15px; padding: 10px 16px; }
+.btn.small { font-size: 12.5px; padding: 4px 9px; }
+.btn.icon { padding: 6px 10px; min-width: 36px; }
+.btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+.btn[aria-pressed="true"] { background: var(--fail-soft); color: var(--fail); border-color: transparent; }
+input[type=number], input[type=text], select, textarea {
+  font: inherit; font-size: 14px; padding: 7px 9px; border-radius: var(--radius-sm); width: 100%;
+  border: 1px solid var(--border-strong); background: var(--surface); color: var(--text); }
+input[type=number] { font-variant-numeric: tabular-nums; }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.toggle { display: inline-flex; gap: 8px; align-items: center; cursor: pointer; }
+
+/* ---------- Tabs ---------- */
+.tabs { display: flex; gap: 2px; margin: 24px 0 16px; border-bottom: 1px solid var(--border); overflow-x: auto; }
+.tabs button { background: none; border: 0; padding: 10px 14px; font: inherit; color: var(--muted); cursor: pointer;
+  border-bottom: 2px solid transparent; white-space: nowrap; margin-bottom: -1px; }
+.tabs button:hover { color: var(--text); }
+.tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--accent); font-weight: 600; }
 section.panel { display: none; padding-bottom: 48px; }
-section.panel.active { display: block; }
+section.panel.active { display: block; animation: fade .18s var(--ease); }
+@keyframes fade { from { opacity: 0; transform: translateY(2px); } to { opacity: 1; transform: none; } }
 
+/* ---------- Cards & layout ---------- */
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
   box-shadow: var(--shadow); padding: 16px; }
 .card + .card { margin-top: 14px; }
-.card h3 { font-size: 15px; margin-bottom: 10px; }
+.card h2 { margin-bottom: 10px; }
+.card-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+.card-head h2 { margin: 0; }
+.section-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 26px 0 10px; }
+/* minmax(0, …) lets wide tables scroll inside their card instead of pushing the page sideways */
+.grid-2 { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: start; }
+.grid-memo { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.grid-memo > .card + .card { margin-top: 0; }
+@media (max-width: 960px) { .grid-2, .grid-memo { grid-template-columns: minmax(0, 1fr); } }
+.policy { position: sticky; top: 12px; }
+@media (max-width: 960px) { .policy { position: static; } }
 
-.grid-2 { display: grid; grid-template-columns: 320px 1fr; gap: 16px; align-items: start; }
-.grid-memo { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; align-items: start; }
-@media (max-width: 900px) { .grid-2, .grid-memo { grid-template-columns: 1fr; } }
-
-/* Policy panel */
-.rule-row { display: grid; grid-template-columns: 1fr 92px; gap: 8px; align-items: center;
+/* ---------- Policy panel ---------- */
+.rule-row { display: grid; grid-template-columns: 1fr 84px; gap: 8px; align-items: center;
   padding: 7px 0; border-bottom: 1px dashed var(--border); }
-.rule-row:last-of-type { border-bottom: 0; }
+#policy-rows { margin-top: 10px; }
 .rule-row label { font-size: 13.5px; }
 .rule-row .op { color: var(--muted); font-size: 12px; }
 .rule-row.changed label::after { content: "edited"; margin-left: 6px; font-size: 11px; color: var(--accent);
   background: var(--accent-soft); padding: 1px 6px; border-radius: 999px; }
-.rid { font: 600 11px ui-monospace, Menlo, monospace; color: var(--muted); margin-right: 4px; }
-input[type=number], input[type=text], select {
-  width: 100%; font: inherit; font-size: 14px; padding: 6px 8px; border-radius: 7px;
-  border: 1px solid var(--border); background: var(--surface); color: var(--text); }
-input:focus, select:focus, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.btns { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
-button.btn { font: inherit; font-size: 13px; padding: 7px 12px; border-radius: 7px; cursor: pointer;
-  border: 1px solid var(--border); background: var(--surface); color: var(--text); }
-button.btn:hover { background: var(--surface-2); }
-button.btn.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
-button.btn.primary:hover { filter: brightness(1.08); }
-button.btn:disabled { opacity: .5; cursor: not-allowed; }
+.rid { font: 600 11px ui-monospace, Menlo, monospace; color: var(--muted); margin-right: 5px; }
 
-/* Summary chips */
+/* ---------- Summary chips ---------- */
 .chips { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
 @media (max-width: 700px) { .chips { grid-template-columns: repeat(2, 1fr); } }
 .chip { border-radius: var(--radius); padding: 10px 12px; border: 1px solid var(--border); background: var(--surface); }
@@ -115,17 +147,21 @@ button.btn:disabled { opacity: .5; cursor: not-allowed; }
 .chip .d { font-size: 12px; font-weight: 600; margin-left: 6px; }
 .chip .d.up { color: var(--fail); } .chip .d.down { color: var(--pass); }
 
-/* Portfolio grid */
+/* ---------- Tables & status ---------- */
 .table-wrap { overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
-th, td { padding: 7px 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: top; }
-th { font-size: 12px; color: var(--muted); font-weight: 600; white-space: nowrap; }
-table.port td.c, table.port th.c { text-align: center; padding: 6px 3px; }
-table.port tbody tr { cursor: pointer; }
+th, td { padding: 8px; text-align: left; border-bottom: 1px solid var(--border); vertical-align: middle; }
+th { font-size: 11.5px; color: var(--muted); font-weight: 600; }
+table.port th.c { text-align: center; padding: 6px 2px; line-height: 1.2; white-space: normal; min-width: 52px; }
+table.port td.c { text-align: center; padding: 6px 2px; }
+table.port tbody tr { transition: background .12s var(--ease); }
 table.port tbody tr:hover { background: var(--surface-2); }
 table.port tr.moved { background: var(--accent-soft); }
+.file-link { background: none; border: 0; padding: 2px 0; font: inherit; color: var(--text); cursor: pointer; text-align: left; white-space: nowrap; }
+.file-link b { margin-right: 4px; }
+.file-link:hover b { color: var(--accent); text-decoration: underline; }
 .cell { display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 6px;
-  font-size: 12px; font-weight: 700; }
+  font-size: 12px; font-weight: 700; font-style: normal; }
 .s-FAIL { background: var(--fail-soft); color: var(--fail); }
 .s-CANT_CHECK { background: var(--cant-soft); color: var(--cant); }
 .s-BORDERLINE { background: var(--border-soft); color: var(--border-s); }
@@ -138,199 +174,246 @@ table.port tr.moved { background: var(--accent-soft); }
 .was { display: block; font-size: 11.5px; color: var(--muted); margin-top: 2px; }
 .legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); margin-top: 10px; }
 .legend span { display: inline-flex; align-items: center; gap: 5px; }
-.changes li { margin: 4px 0; font-size: 14px; }
+.changes { padding-left: 18px; margin: 0; }
+.changes li { margin: 6px 0; font-size: 14px; }
 
-/* Review */
-.file-head { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
-.file-head .meta { flex: 1 1 260px; }
-.file-head h2 { font-size: 20px; }
-.counts { display: flex; gap: 8px; flex-wrap: wrap; }
+/* ---------- File review ---------- */
+.file-bar .row select { flex: 1 1 260px; width: auto; }
+.file-meta { margin-top: 12px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
+.file-meta h2 { font-size: 20px; }
+.counts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.spoiler { margin-top: 10px; }
+.spoiler summary { cursor: pointer; color: var(--muted); font-size: 13px; }
 details.rule { border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface);
-  margin-top: 10px; box-shadow: var(--shadow); }
+  margin-top: 8px; box-shadow: var(--shadow); }
 details.rule > summary { list-style: none; cursor: pointer; padding: 12px 14px; display: flex; gap: 10px;
-  align-items: center; flex-wrap: wrap; }
+  align-items: center; flex-wrap: wrap; border-radius: var(--radius); }
 details.rule > summary::-webkit-details-marker { display: none; }
+details.rule > summary::after { content: "▾"; margin-left: auto; color: var(--muted); transition: transform .15s var(--ease); }
+details.rule:not([open]) > summary::after { transform: rotate(-90deg); }
 details.rule > summary .title { font-weight: 600; }
 details.rule > summary .val { color: var(--muted); font-size: 13.5px; }
-details.rule .body { padding: 0 14px 14px; border-top: 1px solid var(--border); }
-.warn { background: var(--cant-soft); color: var(--cant); padding: 8px 10px; border-radius: 7px; margin: 10px 0; font-size: 13.5px; }
-.err { background: var(--fail-soft); color: var(--fail); padding: 8px 10px; border-radius: 7px; margin-top: 8px; font-size: 13.5px; }
-.ok { background: var(--pass-soft); color: var(--pass); padding: 8px 10px; border-radius: 7px; font-size: 13.5px; }
-.decide { display: grid; grid-template-columns: 260px 1fr; gap: 10px; margin-top: 12px; }
+details.rule .body { padding: 2px 14px 14px; border-top: 1px solid var(--border); }
+.decided { font-size: 12px; color: var(--pass); font-weight: 600; }
+.warn { background: var(--cant-soft); color: var(--cant); padding: 8px 10px; border-radius: var(--radius-sm); margin: 10px 0; font-size: 13.5px; }
+.err { background: var(--fail-soft); color: var(--fail); padding: 8px 10px; border-radius: var(--radius-sm); margin-top: 8px; font-size: 13.5px; }
+.ok { background: var(--pass-soft); color: var(--pass); padding: 8px 10px; border-radius: var(--radius-sm); font-size: 13.5px; margin-top: 8px; }
+.decide { display: grid; grid-template-columns: 240px 1fr; gap: 10px; margin-top: 12px; }
 @media (max-width: 700px) { .decide { grid-template-columns: 1fr; } }
 .decide label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 3px; }
-.note { background: var(--accent-soft); color: var(--text); padding: 8px 12px; border-radius: 8px; font-size: 13.5px; margin-bottom: 12px; }
-.spoiler summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.note { background: var(--accent-soft); padding: 8px 12px; border-radius: var(--radius-sm); font-size: 13.5px; margin-bottom: 12px; }
+.passing-head { margin: 16px 0 0; font-size: 13px; color: var(--muted); }
 
-/* Memo */
-.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
-.seg button { font: inherit; font-size: 13px; padding: 7px 12px; border: 0; background: var(--surface);
-  color: var(--muted); cursor: pointer; }
-.seg button[aria-pressed="true"] { background: var(--accent); color: #fff; }
-.memo h4 { font-size: 14px; margin: 14px 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+/* ---------- Memo ---------- */
+.seg { display: inline-flex; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 6px 12px; border: 0; background: var(--surface); color: var(--muted); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--border-strong); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); }
+.ai-box { margin-bottom: 14px; }
+.provenance { font-size: 12.5px; color: var(--muted); }
+.provenance b { color: var(--text); font-weight: 600; }
+.memo h4 { font-size: 12px; margin: 14px 0 4px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
 .memo h4:first-child { margin-top: 0; }
 .memo p { margin: 4px 0; }
+.memo-editor { min-height: 360px; font: 13px/1.5 ui-monospace, Menlo, monospace; resize: vertical; }
 .tag { font: 600 10.5px ui-monospace, Menlo, monospace; background: var(--surface-2); color: var(--muted);
   border: 1px solid var(--border); padding: 0 4px; border-radius: 4px; vertical-align: 1px; }
 mark.bad { background: var(--fail-soft); color: var(--fail); font-weight: 700; padding: 0 2px; border-radius: 3px; }
+.checks h3 { margin-bottom: 6px; }
+.checks #plant { margin-top: 10px; }
 .check-line { display: flex; gap: 8px; margin: 8px 0; font-size: 14px; }
 .check-line .ic { width: 20px; flex: none; }
-.progress { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin-top: 8px; }
-.progress > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
-.ai-box { margin-top: 12px; padding: 12px; border: 1px dashed var(--border); border-radius: var(--radius); }
-.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
-.toggle { display: inline-flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+.progress { height: 6px; background: var(--surface-2); border-radius: 999px; overflow: hidden; margin-top: 10px; }
+.progress > div { height: 100%; width: 0; background: var(--accent); transition: width .2s var(--ease); }
 .cursor::after { content: "▍"; animation: blink 1s steps(2) infinite; color: var(--accent); }
 @keyframes blink { 50% { opacity: 0; } }
+.empty { color: var(--muted); padding: 8px 0; }
 
-/* About */
+/* ---------- About dialog ---------- */
+dialog { border: 1px solid var(--border); border-radius: 16px; padding: 0; width: min(720px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px); background: var(--surface); color: var(--text); box-shadow: 0 20px 60px rgba(0, 0, 0, .25); }
+dialog::backdrop { background: rgba(10, 12, 18, .45); }
+.about-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px;
+  border-bottom: 1px solid var(--border); position: sticky; top: 0; background: var(--surface); }
+.about-head h2 { font-size: 18px; }
+.about-body { padding: 4px 20px 20px; }
+.about-body h3 { margin-top: 18px; }
+.about-body ul { padding-left: 18px; margin: 6px 0; }
+.about-body li { margin: 4px 0; }
+
+/* ---------- Misc ---------- */
 .glossary dt { font-weight: 600; margin-top: 8px; }
 .glossary dd { margin: 0 0 4px; color: var(--muted); }
 footer { padding: 24px 0 40px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 <header class="top">
   <div class="wrap top-inner">
-    <div class="brand"><div class="mark">✓</div>Credit Policy Desk</div>
+    <div class="brand"><div class="mark" aria-hidden="true">✓</div>Credit Policy Desk</div>
     <div class="pills">
       <span class="pill good">Runs in your browser</span>
       <span class="pill good">No API key</span>
       <span class="pill">Made-up data</span>
     </div>
+    <button class="btn ghost" id="open-about" type="button">About this project</button>
   </div>
 </header>
 
-<main class="wrap">
-  <div class="hero">
-    <h1>Check loan files against the lender's own policy, before the memo reaches a reviewer.</h1>
-    <p>AI can draft a credit memo in minutes. A reviewer still asks two things: <b>does this loan break our policy?</b>
-      and <b>can I trust the numbers?</b> Here, code makes every decision, AI only writes, and code checks what the AI wrote.</p>
-    <div class="flow">
-      <div class="step"><b>1 · Code reads</b><span>Each number, with the document and page it came from</span></div>
-      <div class="arrow">→</div>
-      <div class="step"><b>2 · Code decides</b><span>Every rule: fails, can't check, borderline or passes</span></div>
-      <div class="arrow">→</div>
-      <div class="step"><b>3 · AI rewords</b><span>A small model in your browser puts the memo in plain English</span></div>
-      <div class="arrow">→</div>
-      <div class="step"><b>4 · Code checks</b><span>Every number, citation and the outcome, before a human sees it</span></div>
+<main class="wrap" id="main">
+  <section class="hero" aria-labelledby="hero-title">
+    <h1 id="hero-title">Catch policy breaks and wrong numbers before a credit memo reaches the reviewer.</h1>
+    <p>Code checks every rule in the lender's own policy, a small AI running in your browser rewords the memo, and code checks
+      every figure it wrote. Twelve made-up loan files are loaded, so you can try it straight away.</p>
+    <div class="btns hero-cta">
+      <button class="btn primary lg" id="cta-review" type="button">Review a flagged loan file →</button>
+      <button class="btn lg" id="cta-book" type="button">See all 12 files</button>
     </div>
+    <ol class="flow" aria-label="How it works">
+      <li><b>Code reads</b><span>each figure, with its source page</span></li>
+      <li><b>Code decides</b><span>pass, fail, borderline or can't check</span></li>
+      <li><b>AI rewords</b><span>the memo, never typing a number</span></li>
+      <li><b>Code checks</b><span>figures, meaning and outcome</span></li>
+    </ol>
+  </section>
+
+  <div class="tabs" role="tablist" aria-label="Sections">
+    <button role="tab" id="tab-btn-book" aria-controls="tab-book" data-tab="book" aria-selected="true">Loan book</button>
+    <button role="tab" id="tab-btn-review" aria-controls="tab-review" data-tab="review" aria-selected="false" tabindex="-1">File review</button>
+    <button role="tab" id="tab-btn-how" aria-controls="tab-how" data-tab="how" aria-selected="false" tabindex="-1">How well it works</button>
   </div>
 
-  <nav class="tabs" role="tablist">
-    <button role="tab" data-tab="portfolio" aria-selected="true">1 · Policy what-if</button>
-    <button role="tab" data-tab="review" aria-selected="false">2 · Review a file</button>
-    <button role="tab" data-tab="memo" aria-selected="false">3 · Memo + AI check</button>
-    <button role="tab" data-tab="about" aria-selected="false">4 · How well it works</button>
-  </nav>
-
-  <section class="panel active" id="tab-portfolio">
+  <!-- ============ Loan book ============ -->
+  <section class="panel active" id="tab-book" role="tabpanel" aria-labelledby="tab-btn-book">
     <div class="grid-2">
-      <div class="card">
-        <h3>Lender policy</h3>
-        <p class="muted" style="margin:0 0 8px;font-size:13px">Change a limit and all 12 files re-check instantly.</p>
-        <div id="policy-rows"></div>
-        <div class="rule-row"><label><span class="rid">±</span>Borderline zone <span class="op">(% of limit)</span></label>
-          <input type="number" id="margin" min="0" max="25" step="1"></div>
-        <div class="btns">
-          <button class="btn" data-preset="tight">Downturn: tighten</button>
-          <button class="btn" data-preset="loose">Growth push: loosen</button>
-          <button class="btn" data-preset="reset">Reset</button>
-        </div>
-      </div>
       <div>
         <div class="chips" id="chips"></div>
         <div class="card">
-          <h3>12 loan files × 10 rules <small style="font-weight:400">· click a row to review it</small></h3>
+          <div class="card-head">
+            <h2>12 loan files × 10 policy rules</h2>
+            <label class="toggle small"><input type="checkbox" id="sort-attention" checked> Needs attention first</label>
+          </div>
           <div class="table-wrap"><table class="port" id="port"></table></div>
           <div class="legend">
-            <span><i class="cell s-FAIL">✕</i>Fails</span><span><i class="cell s-CANT_CHECK">?</i>Can't check</span>
-            <span><i class="cell s-BORDERLINE">!</i>Borderline</span><span><i class="cell s-PASS">✓</i>Passes</span>
+            <span><i class="cell s-FAIL" aria-hidden="true">✕</i>Fails</span><span><i class="cell s-CANT_CHECK" aria-hidden="true">?</i>Can't check</span>
+            <span><i class="cell s-BORDERLINE" aria-hidden="true">!</i>Borderline</span><span><i class="cell s-PASS" aria-hidden="true">✓</i>Passes</span>
           </div>
         </div>
         <div class="card" id="changes-card">
-          <h3>What changed vs. the original policy</h3>
+          <h2>What changed vs. the original policy</h2>
           <div id="changes"></div>
         </div>
       </div>
+      <aside class="card policy" aria-labelledby="policy-title">
+        <h2 id="policy-title">Policy what-if</h2>
+        <p class="muted small">For the credit-policy head: change a limit and every file re-checks instantly. File review uses this policy too.</p>
+        <div class="btns">
+          <button class="btn" data-preset="tight" type="button">Downturn: tighten</button>
+          <button class="btn" data-preset="loose" type="button">Growth: loosen</button>
+          <button class="btn ghost" data-preset="reset" type="button">Reset</button>
+        </div>
+        <div id="policy-rows"></div>
+        <div class="rule-row"><label for="margin"><span class="rid">±</span>Borderline zone <span class="op">% of limit</span></label>
+          <input type="number" id="margin" min="0" max="25" step="1"></div>
+      </aside>
     </div>
   </section>
 
-  <section class="panel" id="tab-review">
+  <!-- ============ File review ============ -->
+  <section class="panel" id="tab-review" role="tabpanel" aria-labelledby="tab-btn-review">
     <div id="policy-note"></div>
-    <div class="card">
-      <div class="file-head">
-        <div style="flex:0 1 300px"><select id="borrower" aria-label="Choose a loan file"></select></div>
-        <div class="meta" id="file-meta"></div>
+    <div class="card file-bar">
+      <div class="row">
+        <button class="btn icon" id="prev-file" type="button" aria-label="Previous file">←</button>
+        <select id="borrower" aria-label="Choose a loan file"></select>
+        <button class="btn icon" id="next-file" type="button" aria-label="Next file">→</button>
       </div>
-      <details class="spoiler" style="margin-top:10px"><summary>What was planted in this file (spoiler)</summary><p id="planted" style="margin:6px 0 0"></p></details>
+      <div id="file-meta" class="file-meta"></div>
+      <details class="spoiler"><summary>What was planted in this file (spoiler)</summary><p id="planted"></p></details>
     </div>
-    <h3 style="margin:18px 0 0">Check these first</h3>
+
+    <div class="section-head"><h2>1 · Check these first</h2><span class="muted small" id="progress-note"></span></div>
     <div id="queue"></div>
-    <div class="card" style="margin-top:18px">
-      <h3>Audit log</h3>
-      <div id="audit"></div>
+
+    <div class="section-head"><h2>2 · Credit memo</h2>
+      <div class="seg" role="group" aria-label="Who writes the memo">
+        <button data-writer="template" aria-pressed="true" type="button">Code template</button>
+        <button data-writer="ai" aria-pressed="false" type="button">On-device AI</button>
+      </div>
     </div>
+    <div class="card ai-box" id="ai-box" hidden>
+      <div class="row">
+        <select id="model" aria-label="AI model"></select>
+        <button class="btn" id="load-model" type="button">Load model</button>
+        <button class="btn primary" id="write-ai" type="button" disabled>Write memo</button>
+      </div>
+      <div class="progress" id="progress" hidden><div></div></div>
+      <p class="muted small" id="ai-status" role="status" aria-live="polite"></p>
+    </div>
+    <div class="grid-memo">
+      <div class="card">
+        <div class="card-head">
+          <span class="provenance" id="provenance"></span>
+          <div class="btns tight">
+            <button class="btn small" id="edit-memo" type="button">Edit</button>
+            <button class="btn small ghost" id="reset-memo" type="button" hidden>Undo edits</button>
+          </div>
+        </div>
+        <div class="memo" id="memo-text"></div>
+        <textarea id="memo-editor" class="memo-editor" hidden aria-label="Edit memo text"></textarea>
+      </div>
+      <div class="card checks">
+        <h3>Checks on this memo <small class="muted">(code, not AI)</small></h3>
+        <div id="memo-checks" role="status" aria-live="polite"></div>
+        <button class="btn small ghost" id="plant" type="button" aria-pressed="false">Test the checker: plant a wrong number</button>
+      </div>
+    </div>
+
+    <div class="section-head"><h2>3 · Audit log</h2><span class="muted small">Saved in this browser</span></div>
+    <div class="card"><div id="audit"></div></div>
   </section>
 
-  <section class="panel" id="tab-memo">
-    <div class="card">
-      <div class="row" style="justify-content:space-between">
-        <div class="row">
-          <span class="muted" style="font-size:13px">Memo for</span>
-          <select id="memo-borrower" style="width:auto"></select>
-        </div>
-        <div class="seg" role="group" aria-label="Who writes the memo">
-          <button data-writer="template" aria-pressed="true">Template (instant)</button>
-          <button data-writer="ai" aria-pressed="false">On-device AI</button>
-        </div>
-      </div>
-      <div class="ai-box" id="ai-box" hidden>
-        <div class="row">
-          <select id="model" style="width:auto"></select>
-          <button class="btn" id="load-model">Load model</button>
-          <button class="btn primary" id="write-ai" disabled>Write memo</button>
-        </div>
-        <div class="progress" id="progress" hidden><div></div></div>
-        <p class="muted" id="ai-status" style="font-size:13px;margin:8px 0 0"></p>
-      </div>
-      <label class="toggle" style="margin-top:12px"><input type="checkbox" id="plant"> Demo: plant a wrong number in the memo, to see the check catch it</label>
-    </div>
-    <div class="grid-memo" style="margin-top:14px">
-      <div class="card"><div class="memo" id="memo-text"></div></div>
-      <div class="card"><h3>Checks on this memo (code, not AI)</h3><div id="memo-checks"></div></div>
-    </div>
-  </section>
-
-  <section class="panel" id="tab-about">
+  <!-- ============ How well it works ============ -->
+  <section class="panel" id="tab-how" role="tabpanel" aria-labelledby="tab-btn-how">
     <div class="grid-memo">
       <div>
         <div class="card">
-          <h3>Rule engine vs. answers written by hand</h3>
+          <h2>Rule engine vs. answers written by hand</h2>
           <div id="eval-rules"></div>
         </div>
         <div class="card">
-          <h3>AI memo test (runs on this device)</h3>
-          <p style="margin-top:0">Code writes an outline of each memo and decides what goes where. The on-device model only rewords it in
-            plainer English; it never types a number. Code fills the figures back in and checks the result. A wrong figure, a sentence
-            that contradicts a rule's result, a sentence with no source, or a changed outcome is blocked, and the model gets up to
-            3 tries. The table shows how often it needed more than one.</p>
-          <div class="row"><button class="btn primary" id="run-ai-test">Run AI test on 12 files</button>
-            <span class="muted" id="ai-test-status" style="font-size:13px"></span></div>
-          <div id="ai-test" style="margin-top:10px"></div>
+          <h2>AI memo test (runs on this device)</h2>
+          <p>Code writes an outline of each memo and decides what goes where. The on-device model only rewords it in plainer
+            English; it never types a number. Code fills the figures back in and checks the result. A blocked draft gets up to
+            3 tries. This test runs all 12 files and reports what happened.</p>
+          <div class="row"><button class="btn primary" id="run-ai-test" type="button">Run AI test on 12 files</button>
+            <span class="muted small" id="ai-test-status" role="status" aria-live="polite"></span></div>
+          <div id="ai-test"></div>
         </div>
       </div>
       <div>
         <div class="card">
-          <h3>Why the AI runs in the browser</h3>
-          <p style="margin-top:0">Borrower files hold bank statements and tax data. Here the model is downloaded once and runs on this
-            device through WebGPU, so no file leaves the laptop and no API key is needed. Code, not the model, decides every result,
-            so a small model is enough: its job is only to write.</p>
-          <p class="muted" style="font-size:13px">Model: open-source, via WebLLM. Needs a browser with WebGPU (recent Chrome or Edge on desktop).</p>
+          <h2>Tested in the code</h2>
+          <p>The repository has automated tests that run the same checks in Python and JavaScript, including 11 "attack" memos
+            written to fool the checker (a rounded number hiding a failure, the right number with the wrong meaning, a memo
+            recommending approval for a loan outside policy). Run them with <code>python3 tests/run_tests.py</code>.</p>
+          <p><a href="https://github.com/sanyamgaur/credit-policy-desk" target="_blank" rel="noopener">View the code on GitHub ↗</a></p>
         </div>
         <div class="card">
-          <h3>Terms used here</h3>
+          <h2>Why the AI runs in the browser</h2>
+          <p>Borrower files hold bank statements and tax data. The model downloads once and runs on this device through
+            WebGPU, so no file leaves the laptop and no API key is needed. Code, not the model, decides every result, so a small
+            model is enough.</p>
+          <p class="muted small">Needs a browser with WebGPU (recent Chrome or Edge on a desktop). Everything else works in any browser.</p>
+        </div>
+        <div class="card">
+          <h2>Terms used here</h2>
           <dl class="glossary" id="glossary"></dl>
         </div>
       </div>
@@ -338,9 +421,48 @@ footer { padding: 24px 0 40px; color: var(--muted); font-size: 13px; border-top:
   </section>
 </main>
 
+<dialog id="about" aria-labelledby="about-title">
+  <form method="dialog" class="about-head"><h2 id="about-title">About this project</h2><button class="btn icon" aria-label="Close">✕</button></form>
+  <div class="about-body">
+    <h3>The problem</h3>
+    <p>AI can draft a credit memo in minutes, but a lender's reviewer still asks two things: does this loan break our own
+      policy, and can I trust the numbers? General AI models are known to make confident mistakes with figures from
+      financial documents, so reviewers end up re-checking everything.</p>
+    <h3>Who it's for</h3>
+    <p><b>Credit reviewers</b> deciding one loan file at a time, and <b>credit-policy heads</b> deciding what the rules should be.</p>
+    <h3>Key product decisions</h3>
+    <ul>
+      <li><b>Code decides, AI only rewords.</b> Every pass or fail comes from code, so the same file always gets the same answer and every result traces to a document page.</li>
+      <li><b>Problems first.</b> Reviewers see failures and missing documents before anything that passes.</li>
+      <li><b>The AI never types a number.</b> Code writes the outline with placeholders, the model rewords it, and code fills the figures back in, then checks figures, meaning and the outcome.</li>
+      <li><b>Overrides need a reason.</b> Approving a broken rule is recorded only with a written reason, in a saved audit log.</li>
+      <li><b>On-device AI.</b> Borrower data never leaves the laptop; no API key or server.</li>
+    </ul>
+    <h3>What I learned by testing</h3>
+    <p>I tried to break my own checker and found 5 ways, including a rounded number hiding a failure and the right number
+      with the wrong meaning. That led to the placeholder design. A 0.5B model also ignored the memo format when asked to
+      write from raw facts, which is why the AI now only rewords a code-written outline.</p>
+    <h3>Honest limits</h3>
+    <ul>
+      <li>All 12 borrowers and the policy are made up and simplified (for example, DSCR uses EBITDA).</li>
+      <li>It starts from clean, structured data. Reading figures from real PDFs, the hardest part, is not built.</li>
+      <li>The meaning check uses word lists, so unusual phrasing can slip past it.</li>
+      <li>No real users have tested it yet.</li>
+    </ul>
+    <h3>Next steps</h3>
+    <p>Talk to five credit analysts; read figures from real documents with a confidence score; add a deviation-approval
+      matrix (which rule break needs which approver).</p>
+    <h3>Built with</h3>
+    <p>Plain HTML, CSS and JavaScript (one file, hosted on GitHub Pages), WebLLM + WebGPU for the on-device model, and a
+      Python version of the same rule engine with automated tests.</p>
+    <!-- Edit this paragraph so it states your own role accurately. -->
+    <p class="muted small">Product direction and decisions: Sanyam Gaur. Built with an AI coding assistant.
+      <a href="https://github.com/sanyamgaur/credit-policy-desk" target="_blank" rel="noopener">Code on GitHub ↗</a></p>
+  </div>
+</dialog>
+
 <footer>
   <div class="wrap">
-    <!-- Edit this line with your name and links -->
     Built by <b>Sanyam Gaur</b> as a product exploration. All borrowers, numbers and the lender policy are made up.
     Not affiliated with any lender or company.
   </div>
@@ -740,7 +862,7 @@ MEMO:
 
 </script>
 <script>
-/* UI for Credit Policy Desk. All decisions come from engine.js (window.CAM). */
+/* UI for Credit Policy Desk. Every decision comes from engine.js (window.CAM); this file only displays. */
 (function () {
   "use strict";
   const DATA = window.__DATA__;
@@ -753,15 +875,18 @@ MEMO:
     ["Qwen2.5-1.5B-Instruct-q4f16_1-MLC", "Qwen 2.5 · 1.5B · 880 MB (best writing)"],
   ];
   const ICON = { FAIL: "✕", CANT_CHECK: "?", BORDERLINE: "!", PASS: "✓" };
+  const COLUMN = { R1: "Age", R2: "Bureau", R3: "Late pay", R4: "DSCR", R5: "Debt / EBITDA", R6: "Current ratio",
+    R7: "GST gap", R8: "Bank / GST", R9: "Bounces", R10: "Docs" };
   const DECISIONS = ["Not reviewed yet", "Agree with the flag", "Asked borrower for documents",
     "Override: source data was wrong", "Override: approve as a deviation"];
-  const OUTCOMES = [["WITHIN_POLICY", "Within policy"], ["WITHIN_POLICY_REVIEW", "Borderline items"],
-    ["INCOMPLETE", "Incomplete file"], ["OUTSIDE_POLICY", "Outside policy"]];
+  const OUTCOMES = [["OUTSIDE_POLICY", "Outside policy"], ["INCOMPLETE", "Incomplete file"],
+    ["WITHIN_POLICY_REVIEW", "Borderline items"], ["WITHIN_POLICY", "Within policy"]];
+  const SEVERITY = { OUTSIDE_POLICY: 0, INCOMPLETE: 1, WITHIN_POLICY_REVIEW: 2, WITHIN_POLICY: 3 };
   const STEP = { x: 0.05, "%": 1, years: 0.5, days: 5, "": 1 };
-  const PRESETS = {
-    tight: { R2: 720, R4: 1.4, R5: 3.0, R6: 1.3, R7: 8 },
-    loose: { R2: 680, R4: 1.15, R5: 4.0, R8: 70 },
-  };
+  const PRESETS = { tight: { R2: 720, R4: 1.4, R5: 3.0, R6: 1.3, R7: 8 }, loose: { R2: 680, R4: 1.15, R5: 4.0, R8: 70 } };
+  const MAX_TRIES = 3;
+  const TEMPERATURES = [0.2, 0.5, 0.8];  // later tries are more varied
+  const STORE_KEY = "cpd.decisions.v1";
   const GLOSSARY = [
     ["CAM (Credit Assessment Memo)", "The document that explains why a loan should or shouldn't be approved."],
     ["Credit policy", "A lender's own rulebook for which loans it will give."],
@@ -781,43 +906,79 @@ MEMO:
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  // ---------------- State ----------------
   let policy = clone(ORIGINAL);
-  let current = BORROWERS[0].id;
   let writer = "template";
-  const decisions = {};
-  const aiMemos = {};
+  let editing = false, plant = false;
   let llm = null, llmModel = null, busy = false;
+  const aiMemos = {}, aiMeta = {}, memoEdits = {};
+  const decisions = loadDecisions();
 
   const byId = (id) => BORROWERS.find((b) => b.id === id);
   const evalAll = (p) => BORROWERS.map((b) => CAM.evaluate(b, p));
   const BASE = evalAll(ORIGINAL);
-  const policyKey = () => JSON.stringify(policy.rules.map((r) => r.threshold).concat(policy.borderline_margin_pct));
-  const policyEdited = () => policyKey() !== JSON.stringify(ORIGINAL.rules.map((r) => r.threshold).concat(ORIGINAL.borderline_margin_pct));
+  const policyKey = (p = policy) => JSON.stringify(p.rules.map((r) => r.threshold).concat(p.borderline_margin_pct));
+  const policyEdited = () => policyKey() !== policyKey(ORIGINAL);
+  // Short, stable fingerprint of the policy, so each audit entry says which policy it was made under.
+  const policyVersion = () => {
+    if (!policyEdited()) return "original";
+    let h = 5381; for (const c of policyKey()) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0;
+    return "edit-" + h.toString(16).slice(0, 6);
+  };
   const outcomeBadge = (rec) => `<span class="badge o-${rec.code}">${esc(rec.label)}</span>`;
   const label = (b) => `${b.id} · ${b.name} · ${b.industry}`;
+  const attentionOrder = (evs) => evs.slice().sort((a, b) =>
+    SEVERITY[a.recommendation.code] - SEVERITY[b.recommendation.code] || a.borrower.id.localeCompare(b.borrower.id));
+  let current = attentionOrder(BASE)[0].borrower.id;
 
-  // ---------------- Tabs ----------------
-  function showTab(name) {
-    document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === name));
+  function loadDecisions() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function saveDecisions() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(decisions)); } catch (e) { /* private mode: keep in memory */ }
+  }
+
+  // ---------------- Tabs (click + arrow keys) ----------------
+  const tabButtons = [...document.querySelectorAll('[role="tab"]')];
+  function showTab(name, focus = false) {
+    tabButtons.forEach((b) => {
+      const on = b.dataset.tab === name;
+      b.setAttribute("aria-selected", on);
+      b.tabIndex = on ? 0 : -1;
+      if (on && focus) b.focus();
+    });
     document.querySelectorAll("section.panel").forEach((s) => s.classList.toggle("active", s.id === `tab-${name}`));
     if (name === "review") renderReview();
-    if (name === "memo") renderMemo();
-    if (name === "about") renderAbout();
+    if (name === "how") renderHow();
   }
-  document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+  tabButtons.forEach((b, i) => {
+    b.addEventListener("click", () => showTab(b.dataset.tab));
+    b.addEventListener("keydown", (e) => {
+      const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (d) { e.preventDefault(); showTab(tabButtons[(i + d + tabButtons.length) % tabButtons.length].dataset.tab, true); }
+    });
+  });
+  const goToTabs = () => document.querySelector(".tabs").scrollIntoView({ behavior: "smooth", block: "start" });
+  $("cta-review").addEventListener("click", () => { current = attentionOrder(evalAll(policy))[0].borrower.id; showTab("review"); goToTabs(); });
+  $("cta-book").addEventListener("click", () => { showTab("book"); goToTabs(); });
 
-  // ---------------- 1. Policy what-if ----------------
+  // ---------------- About dialog ----------------
+  const about = $("about");
+  $("open-about").addEventListener("click", () => about.showModal());
+  about.addEventListener("click", (e) => { if (e.target === about) about.close(); });  // click on backdrop closes
+
+  // ---------------- Loan book + policy what-if ----------------
   function renderPolicyRows() {
     $("policy-rows").innerHTML = policy.rules.map((r, i) => {
-      if (r.op === "==") return `<div class="rule-row"><label title="${esc(r.text)}"><span class="rid">${r.id}</span>${esc(r.short)}</label><span class="muted" style="font-size:13px">all required</span></div>`;
+      if (r.op === "==") return `<div class="rule-row"><label title="${esc(r.text)}"><span class="rid">${r.id}</span>${esc(r.short)}</label><span class="muted small">all required</span></div>`;
       const sym = r.op === ">=" ? "≥" : "≤";
       return `<div class="rule-row" id="row-${r.id}"><label for="th-${r.id}" title="${esc(r.text)}"><span class="rid">${r.id}</span>${esc(r.short)} <span class="op">${sym}${r.unit && r.unit !== "x" ? " " + esc(r.unit) : ""}</span></label>
-        <input type="number" id="th-${r.id}" data-i="${i}" step="${STEP[r.unit] ?? 1}" value="${r.threshold}"></div>`;
+        <input type="number" id="th-${r.id}" data-i="${i}" min="0" step="${STEP[r.unit] ?? 1}" value="${r.threshold}"></div>`;
     }).join("");
     $("margin").value = policy.borderline_margin_pct;
     $("policy-rows").querySelectorAll("input").forEach((inp) => inp.addEventListener("input", () => {
       const v = parseFloat(inp.value);
-      if (!Number.isFinite(v)) return;
+      if (!Number.isFinite(v) || v < 0) return;   // ignore half-typed or negative limits
       policy.rules[+inp.dataset.i].threshold = v;
       renderPortfolio();
     }));
@@ -825,7 +986,7 @@ MEMO:
   }
   $("margin").addEventListener("input", () => {
     const v = parseFloat($("margin").value);
-    if (!Number.isFinite(v) || v < 0) return;
+    if (!Number.isFinite(v) || v < 0 || v > 25) return;
     policy.borderline_margin_pct = v;
     renderPortfolio();
   });
@@ -836,6 +997,7 @@ MEMO:
     renderPolicyRows();
     renderPortfolio();
   }));
+  $("sort-attention").addEventListener("change", () => renderPortfolio());
   function markEdited() {
     policy.rules.forEach((r, i) => {
       const row = $(`row-${r.id}`);
@@ -846,6 +1008,7 @@ MEMO:
   function renderPortfolio() {
     markEdited();
     const evs = evalAll(policy);
+    const baseOf = (id) => BASE.find((e) => e.borrower.id === id);
     const count = (list, code) => list.filter((e) => e.recommendation.code === code).length;
     $("chips").innerHTML = OUTCOMES.map(([code, name]) => {
       const n = count(evs, code), d = n - count(BASE, code);
@@ -854,153 +1017,190 @@ MEMO:
       return `<div class="chip"><div class="n">${n}${d ? `<span class="d ${cls}">${d > 0 ? "+" : ""}${d}</span>` : ""}</div><div class="l"><span class="badge o-${code}">${name}</span></div></div>`;
     }).join("");
 
-    const head = `<thead><tr><th>Loan file</th>${policy.rules.map((r) => `<th class="c" title="${esc(r.short)}">${r.id}</th>`).join("")}<th>Outcome</th></tr></thead>`;
-    const rows = evs.map((ev, i) => {
-      const b = ev.borrower, moved = ev.recommendation.code !== BASE[i].recommendation.code;
-      const cells = ev.results.map((r) => `<td class="c"><span class="cell s-${r.status}" title="${esc(r.short)}: ${esc(CAM.STATUS_LABEL[r.status])} (${esc(r.value_display)})">${ICON[r.status]}</span></td>`).join("");
-      return `<tr data-id="${b.id}" class="${moved ? "moved" : ""}"><td><b>${b.id}</b> <span class="muted">${esc(b.industry)}</span></td>${cells}
-        <td>${outcomeBadge(ev.recommendation)}${moved ? `<span class="was">was: ${esc(BASE[i].recommendation.label)}</span>` : ""}</td></tr>`;
+    const ordered = $("sort-attention").checked ? attentionOrder(evs) : evs;
+    const head = `<thead><tr><th scope="col">Loan file</th>${policy.rules.map((r) => `<th scope="col" class="c" title="${esc(r.text)}">${esc(COLUMN[r.id] || r.id)}</th>`).join("")}<th scope="col">Outcome</th></tr></thead>`;
+    const rows = ordered.map((ev) => {
+      const b = ev.borrower, before = baseOf(b.id), moved = ev.recommendation.code !== before.recommendation.code;
+      const cells = ev.results.map((r) => `<td class="c"><span class="cell s-${r.status}" title="${esc(r.short)}: ${esc(CAM.STATUS_LABEL[r.status])} (${esc(r.value_display)})" aria-label="${esc(r.short)}: ${esc(CAM.STATUS_LABEL[r.status])}">${ICON[r.status]}</span></td>`).join("");
+      return `<tr class="${moved ? "moved" : ""}"><th scope="row"><button class="file-link" type="button" data-id="${esc(b.id)}"><b>${esc(b.id)}</b><span class="muted">${esc(b.industry)}</span></button></th>${cells}
+        <td>${outcomeBadge(ev.recommendation)}${moved ? `<span class="was">was: ${esc(before.recommendation.label)}</span>` : ""}</td></tr>`;
     }).join("");
     $("port").innerHTML = head + `<tbody>${rows}</tbody>`;
-    $("port").querySelectorAll("tbody tr").forEach((tr) => tr.addEventListener("click", () => {
-      current = tr.dataset.id;
-      showTab("review");
-      document.querySelector("nav.tabs").scrollIntoView({ behavior: "smooth" });
+    $("port").querySelectorAll(".file-link").forEach((btn) => btn.addEventListener("click", () => {
+      current = btn.dataset.id; showTab("review"); goToTabs();
     }));
 
-    const changes = [];
-    evs.forEach((ev, i) => {
-      const before = BASE[i];
-      const ruleMoves = ev.results.filter((r, j) => r.status !== before.results[j].status)
-        .map((r, _, arr) => `${r.id} ${esc(r.short)}: ${esc(r.value_display)} vs ${esc(r.threshold_display)}`);
-      if (ev.recommendation.code !== before.recommendation.code)
-        changes.push(`<li><b>${ev.borrower.id}</b> ${esc(before.recommendation.label)} → <b>${esc(ev.recommendation.label)}</b><br><small>${ruleMoves.join(" · ")}</small></li>`);
-    });
-    $("changes").innerHTML = !policyEdited() ? `<p class="muted" style="margin:0">This is the original policy. Try <b>Downturn: tighten</b> to see which files would no longer qualify.</p>`
-      : changes.length ? `<ul class="changes" style="padding-left:18px;margin:0">${changes.join("")}</ul>`
-      : `<p class="muted" style="margin:0">Policy edited, but no file changed its outcome.</p>`;
+    const changes = evs.map((ev) => {
+      const before = baseOf(ev.borrower.id);
+      if (ev.recommendation.code === before.recommendation.code) return "";
+      const moves = ev.results.filter((r, j) => r.status !== before.results[j].status)
+        .map((r) => `${r.id} ${esc(r.short)}: ${esc(r.value_display)} vs ${esc(r.threshold_display)}`);
+      return `<li><b>${ev.borrower.id}</b> ${esc(before.recommendation.label)} → <b>${esc(ev.recommendation.label)}</b><br><small class="muted">${moves.join(" · ")}</small></li>`;
+    }).join("");
+    $("changes").innerHTML = !policyEdited()
+      ? `<p class="empty">This is the original policy. Try <b>Downturn: tighten</b> to see which loans would no longer qualify, and why.</p>`
+      : changes ? `<ul class="changes">${changes}</ul>` : `<p class="empty">Policy edited, but no file changed its outcome.</p>`;
   }
 
-  // ---------------- 2. Review a file ----------------
-  function fillBorrowerSelect(sel) {
-    sel.innerHTML = BORROWERS.map((b) => `<option value="${b.id}">${esc(label(b))}</option>`).join("");
-    sel.value = current;
+  // ---------------- File review ----------------
+  function fillBorrowerSelect() {
+    $("borrower").innerHTML = attentionOrder(evalAll(policy)).map((ev) =>
+      `<option value="${esc(ev.borrower.id)}">${esc(label(ev.borrower))} — ${esc(ev.recommendation.label)}</option>`).join("");
+    $("borrower").value = current;
   }
   $("borrower").addEventListener("change", (e) => { current = e.target.value; renderReview(); });
+  function step(d) {
+    const ids = attentionOrder(evalAll(policy)).map((e) => e.borrower.id);
+    current = ids[(ids.indexOf(current) + d + ids.length) % ids.length];
+    renderReview();
+  }
+  $("prev-file").addEventListener("click", () => step(-1));
+  $("next-file").addEventListener("click", () => step(1));
+
+  const decisionKey = (rid) => `${current}:${rid}:${policyVersion()}`;
 
   function renderReview() {
-    fillBorrowerSelect($("borrower"));
+    editing = false;
+    fillBorrowerSelect();
     const b = byId(current), ev = CAM.evaluate(b, policy), q = CAM.reviewQueue(ev), lr = b.loan_request;
-    $("policy-note").innerHTML = policyEdited() ? `<div class="note">You are reviewing against your <b>edited</b> policy from tab 1.</div>` : "";
+    $("policy-note").innerHTML = policyEdited() ? `<div class="note">You're reviewing against your <b>edited</b> policy from the Loan book tab. Decisions are recorded against that policy version.</div>` : "";
     const n = (s) => q.filter((r) => r.status === s).length;
-    $("file-meta").innerHTML = `<div class="row" style="justify-content:space-between">
-      <div><h2>${esc(b.name)} <small style="font-weight:400">· ${esc(b.industry)}</small></h2>
-      <small>Asks for Rs ${lr.amount_lakh} lakh over ${lr.tenure_months} months at ${lr.annual_rate_pct}%</small></div>
+    $("file-meta").innerHTML = `<div><h2>${esc(b.name)} <small class="muted" style="font-weight:400">· ${esc(b.industry)}</small></h2>
+      <p class="muted small" style="margin:4px 0 0">Asks for Rs ${lr.amount_lakh} lakh over ${lr.tenure_months} months at ${lr.annual_rate_pct}%. ${esc(ev.recommendation.explain)}</p></div>
       <div class="counts">${outcomeBadge(ev.recommendation)}
-      <span class="badge s-FAIL">${n("FAIL")} fail</span><span class="badge s-CANT_CHECK">${n("CANT_CHECK")} can't check</span>
-      <span class="badge s-BORDERLINE">${n("BORDERLINE")} borderline</span></div></div>
-      <p style="margin:8px 0 0;font-size:13.5px" class="muted">${esc(ev.recommendation.explain)}</p>`;
+        ${n("FAIL") ? `<span class="badge s-FAIL">${n("FAIL")} fail</span>` : ""}${n("CANT_CHECK") ? `<span class="badge s-CANT_CHECK">${n("CANT_CHECK")} can't check</span>` : ""}${n("BORDERLINE") ? `<span class="badge s-BORDERLINE">${n("BORDERLINE")} borderline</span>` : ""}</div>`;
     $("planted").textContent = b.planted_problem;
 
-    const flagged = q.filter((r) => r.status !== "PASS");
-    const html = (flagged.length ? "" : `<div class="ok" style="margin-top:10px">Nothing to check first: every rule passes comfortably.</div>`)
-      + q.map((r) => ruleCard(r, r.status !== "PASS")).join("");
-    $("queue").innerHTML = html;
-    $("queue").querySelectorAll("[data-key]").forEach(wireDecision);
+    const flagged = q.filter((r) => r.status !== "PASS"), passing = q.filter((r) => r.status === "PASS");
+    $("queue").innerHTML = (flagged.length ? flagged.map((r) => ruleCard(r, true)).join("")
+      : `<div class="ok">Nothing to check first: every rule passes comfortably.</div>`)
+      + (passing.length ? `<p class="passing-head">Passing rules (${passing.length})</p>` + passing.map((r) => ruleCard(r, false)).join("") : "");
+    $("queue").querySelectorAll("[data-rid]").forEach(wireDecision);
+    renderProgress();
+    renderMemo();
     renderAudit();
   }
 
   const edited = (r) => ORIGINAL.rules.find((o) => o.id === r.id).threshold !== r.threshold;
 
   function ruleCard(r, open) {
-    const key = `${current}:${r.id}`;
-    const d = decisions[key] || { decision: DECISIONS[0], reason: "" };
+    const d = decisions[decisionKey(r.id)];
     const inputs = r.inputs.length ? `<div class="table-wrap"><table><thead><tr><th>Input</th><th>Value</th><th>Where it came from</th></tr></thead><tbody>${
       r.inputs.map((i) => `<tr><td>${esc(i.label)}</td><td>${esc(typeof i.value === "number" ? CAM.fmt(i.value, i.unit) : i.value)}</td><td>${esc(i.source)}</td></tr>`).join("")}</tbody></table></div>` : "";
-    const decide = r.status === "PASS" ? "" : `<div class="decide" data-key="${key}">
-      <div><label>Reviewer decision</label><select>${DECISIONS.map((x) => `<option ${x === d.decision ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
-      <div><label>Reason (needed for any override)</label><input type="text" value="${esc(d.reason)}" placeholder="e.g. Promoter brought in Rs 40 lakh fresh equity"></div>
+    const decide = r.status === "PASS" ? "" : `<div class="decide" data-rid="${r.id}">
+      <div><label for="dec-${r.id}">Reviewer decision</label><select id="dec-${r.id}">${DECISIONS.map((x) => `<option ${d && x === d.decision ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
+      <div><label for="why-${r.id}">Reason (needed for any override)</label><input id="why-${r.id}" type="text" value="${esc(d ? d.reason : "")}" placeholder="e.g. Promoter brought in Rs 40 lakh fresh equity"></div>
       <div class="err" hidden style="grid-column:1/-1">An override needs a written reason. Nothing is recorded until you add one.</div></div>`;
-    return `<details class="rule" ${open ? "open" : ""}><summary><span class="cell s-${r.status}">${ICON[r.status]}</span>
+    return `<details class="rule" ${open ? "open" : ""}><summary><span class="cell s-${r.status}" aria-hidden="true">${ICON[r.status]}</span>
       <span class="title">${r.id} · ${esc(r.short)}</span><span class="badge s-${r.status}">${esc(CAM.STATUS_LABEL[r.status])}</span>
-      <span class="val">${esc(r.value_display)} · policy: ${esc(r.threshold_display)}</span></summary>
-      <div class="body"><p><b>Rule:</b> ${esc(r.text)}${edited(r) ? ` <span class="badge" style="background:var(--accent-soft);color:var(--accent)">Edited in tab 1: now ${esc(r.threshold_display)}</span>` : ""}</p>${r.reason ? `<div class="warn">${esc(r.reason)}</div>` : ""}
+      <span class="val">${esc(r.value_display)} · policy: ${esc(r.threshold_display)}</span>${d ? `<span class="decided" id="done-${r.id}">✓ decided</span>` : `<span class="decided" id="done-${r.id}"></span>`}</summary>
+      <div class="body"><p><b>Rule:</b> ${esc(r.text)}${edited(r) ? ` <span class="badge" style="background:var(--accent-soft);color:var(--accent)">Edited: now ${esc(r.threshold_display)}</span>` : ""}</p>${r.reason ? `<div class="warn">${esc(r.reason)}</div>` : ""}
       ${inputs}${r.how ? `<p><b>Calculation:</b> <code>${esc(r.how)}</code> = <b>${esc(r.value_display)}</b></p>` : ""}${decide}</div></details>`;
   }
 
   function wireDecision(box) {
-    const key = box.dataset.key, sel = box.querySelector("select"), txt = box.querySelector("input"), err = box.querySelector(".err");
+    const rid = box.dataset.rid, sel = box.querySelector("select"), txt = box.querySelector("input"), err = box.querySelector(".err");
+    const ev = CAM.evaluate(byId(current), policy), r = ev.results.find((x) => x.id === rid);
     const update = () => {
+      const key = decisionKey(rid);
       const missingReason = sel.value.startsWith("Override") && !txt.value.trim();
       err.hidden = !missingReason;
-      // An override is only recorded once it has a written reason.
-      if (missingReason) delete decisions[key];
-      else decisions[key] = { decision: sel.value, reason: txt.value.trim(), at: new Date().toISOString() };
+      if (missingReason || sel.value === DECISIONS[0]) delete decisions[key];   // overrides need a reason
+      else decisions[key] = { file: current, rule: rid, decision: sel.value, reason: txt.value.trim(),
+        value: r.value_display, policy: policyVersion(), at: new Date().toISOString() };
+      saveDecisions();
+      $(`done-${rid}`).textContent = decisions[key] ? "✓ decided" : "";
+      renderProgress();
       renderAudit();
     };
     sel.addEventListener("change", update);
     txt.addEventListener("input", update);
-    update();
   }
 
-  function auditRows() {
-    return Object.entries(decisions).filter(([, v]) => v.decision !== DECISIONS[0])
-      .map(([k, v]) => ({ file: k.split(":")[0], rule: k.split(":")[1], ...v }));
+  function renderProgress() {
+    const ev = CAM.evaluate(byId(current), policy);
+    const flagged = ev.results.filter((r) => r.status !== "PASS");
+    const done = flagged.filter((r) => decisions[decisionKey(r.id)]).length;
+    $("progress-note").textContent = flagged.length ? `${done} of ${flagged.length} flagged rules decided` : "";
   }
+
   function renderAudit() {
-    const rows = auditRows();
-    $("audit").innerHTML = rows.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th>File</th><th>Rule</th><th>Decision</th><th>Reason</th></tr></thead><tbody>${
-      rows.map((r) => `<tr><td>${esc(new Date(r.at).toLocaleTimeString())}</td><td>${esc(r.file)}</td><td>${esc(r.rule)}</td><td>${esc(r.decision)}</td><td>${esc(r.reason)}</td></tr>`).join("")}</tbody></table></div>
-      <div class="btns"><button class="btn" id="dl-audit">Download audit log (CSV)</button></div>`
-      : `<p class="muted" style="margin:0">No decisions recorded yet. Every decision and its reason lands here.</p>`;
-    const dl = $("dl-audit");
-    if (dl) dl.addEventListener("click", () => {
+    const rows = Object.values(decisions).sort((a, b) => b.at.localeCompare(a.at));
+    $("audit").innerHTML = rows.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th>File</th><th>Rule</th><th>Value then</th><th>Decision</th><th>Reason</th><th>Policy</th></tr></thead><tbody>${
+      rows.map((r) => `<tr><td>${esc(new Date(r.at).toLocaleString())}</td><td>${esc(r.file)}</td><td>${esc(r.rule)}</td><td>${esc(r.value)}</td><td>${esc(r.decision)}</td><td>${esc(r.reason)}</td><td>${esc(r.policy)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="btns" style="margin-top:10px"><button class="btn small" id="dl-audit" type="button">Download CSV</button><button class="btn small ghost" id="clear-audit" type="button">Clear log</button></div>`
+      : `<p class="empty">No decisions yet. Choose a decision on any flagged rule above and it's recorded here with the time, the value at that moment and the policy version.</p>`;
+    if (!rows.length) return;
+    $("dl-audit").addEventListener("click", () => {
       // Quote every cell, and stop spreadsheet apps running text that starts like a formula.
       const q = (s) => { let t = String(s ?? ""); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
-      const csv = ["Time,File,Rule,Decision,Reason", ...rows.map((r) => [r.at, r.file, r.rule, r.decision, r.reason].map(q).join(","))].join("\n");
+      const csv = ["Time,File,Rule,Value then,Decision,Reason,Policy",
+        ...rows.map((r) => [r.at, r.file, r.rule, r.value, r.decision, r.reason, r.policy].map(q).join(","))].join("\n");
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: "audit_log.csv" });
       a.click();
     });
+    $("clear-audit").addEventListener("click", () => {
+      if (!confirm("Clear every recorded decision from this browser?")) return;
+      Object.keys(decisions).forEach((k) => delete decisions[k]);
+      saveDecisions();
+      renderReview();
+    });
   }
 
-  // ---------------- 3. Memo ----------------
+  // ---------------- Memo ----------------
   $("model").innerHTML = MODELS.map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join("");
-  $("memo-borrower").addEventListener("change", (e) => { current = e.target.value; renderMemo(); });
   document.querySelectorAll("[data-writer]").forEach((btn) => btn.addEventListener("click", () => {
     writer = btn.dataset.writer;
     document.querySelectorAll("[data-writer]").forEach((b) => b.setAttribute("aria-pressed", b === btn));
+    editing = false;
     renderMemo();
   }));
-  $("plant").addEventListener("change", () => renderMemoOutput());
+  $("plant").addEventListener("click", () => {
+    plant = !plant;
+    $("plant").setAttribute("aria-pressed", plant);
+    $("plant").textContent = plant ? "Remove the planted number" : "Test the checker: plant a wrong number";
+    renderMemoOutput();
+  });
   $("load-model").addEventListener("click", () => ensureModel().catch(showAiError));
   $("write-ai").addEventListener("click", () => writeAiMemo(current).catch(showAiError));
-  $("model").addEventListener("change", () => { $("write-ai").disabled = !(llm && llmModel === $("model").value); });
+  $("model").addEventListener("change", () => { $("write-ai").disabled = !(llm && llmModel === $("model").value); renderMemoOutput(); });
+  $("edit-memo").addEventListener("click", () => {
+    editing = !editing;
+    if (editing) $("memo-editor").value = currentMemoText();
+    renderMemoOutput();
+    if (editing) $("memo-editor").focus();
+  });
+  $("memo-editor").addEventListener("input", () => { memoEdits[memoKey()] = $("memo-editor").value; renderMemoOutput(); });
+  $("reset-memo").addEventListener("click", () => { delete memoEdits[memoKey()]; editing = false; renderMemoOutput(); });
 
-  const memoKey = (id) => `${id}|${llmModel}|${policyKey()}`;
+  const sourceKey = (id = current) => `${writer}|${writer === "ai" ? llmModel : ""}|${id}|${policyKey()}`;
+  const memoKey = () => sourceKey();
 
   function renderMemo() {
-    fillBorrowerSelect($("memo-borrower"));
     $("ai-box").hidden = writer !== "ai";
-    if (writer === "ai" && !navigator.gpu) {
-      $("ai-status").innerHTML = "This browser doesn't support WebGPU, so the model can't run here. Try recent Chrome or Edge on a desktop. The template memo and all checks still work.";
-      $("load-model").disabled = true;
-    } else if (writer === "ai" && !llm) {
-      $("ai-status").textContent = "The model downloads once, then stays cached in this browser for next time. Your data is never sent to a server.";
+    if (writer === "ai") {
+      if (!navigator.gpu) {
+        $("ai-status").textContent = "This browser can't run the on-device model (no WebGPU). Try recent Chrome or Edge on a laptop. The code template and every check still work.";
+        $("load-model").disabled = true;
+      } else if (!llm) {
+        $("ai-status").textContent = "The model downloads once (290 MB for the smallest), then loads from this browser in seconds. Nothing is sent to a server.";
+      }
     }
     renderMemoOutput();
   }
 
-  function currentMemoText() {
-    if (writer === "template") return CAM.templateMemo(CAM.evaluate(byId(current), policy));
-    return aiMemos[memoKey(current)] || "";
+  function sourceText(id = current) {
+    if (writer === "template") return CAM.templateMemo(CAM.evaluate(byId(id), policy));
+    return aiMemos[sourceKey(id)] || "";
   }
+  function currentMemoText() { return memoEdits[memoKey()] ?? sourceText(); }
 
   function renderMemoMarkdown(text, bad, streaming) {
     let html = text.split("\n").filter((l) => l.trim()).map((line) => {
       let s = esc(line.trim());
       s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
       for (const n of bad) {
-        const re = new RegExp(`(?<![\\d.,])${n.replace(/[.,]/g, (c) => "\\" + c)}(?![\\d])`);
+        const re = new RegExp(`(?<![\\d.,])${n.replace(/[.,\-]/g, (c) => "\\" + c)}(?![\\d])`);
         s = s.replace(re, `<mark class="bad">${n}</mark>`);
       }
       s = s.replace(/\[((?:R\d+|APP|POLICY)(?:\s*,\s*(?:R\d+|APP|POLICY))*)\]/g, '<span class="tag">$1</span>');
@@ -1010,35 +1210,54 @@ MEMO:
     return html;
   }
 
+  function provenance() {
+    const meta = aiMeta[sourceKey()];
+    let s = writer === "template" ? "<b>Code template</b> · written entirely by code"
+      : meta ? `<b>Reworded by ${esc(MODELS.find((m) => m[0] === meta.model)[1].split(" · ").slice(0, 2).join(" "))}</b> on this device · figures filled in by code · ${meta.passed ? (meta.tries > 1 ? `passed on try ${meta.tries}` : "passed first try") : `blocked after ${meta.tries} tries`}`
+      : "<b>On-device AI</b>";
+    if (memoEdits[memoKey()] !== undefined) s += " · <b>edited by reviewer</b>";
+    return s;
+  }
+
   function renderMemoOutput(streaming = false) {
     const ev = CAM.evaluate(byId(current), policy);
     let text = currentMemoText();
-    let plantNote = "";
+    $("provenance").innerHTML = provenance();
+    $("edit-memo").textContent = editing ? "Done" : "Edit";
+    $("edit-memo").disabled = !text || streaming;
+    $("reset-memo").hidden = memoEdits[memoKey()] === undefined;
+    $("memo-editor").hidden = !editing;
+    $("memo-text").hidden = editing;
+    $("plant").disabled = !text || streaming;
     if (!text) {
-      $("memo-text").innerHTML = `<p class="muted">${llm ? "Click <b>Write memo</b> to let the on-device model draft it." : "Load a model, then click <b>Write memo</b>."}</p>`;
-      $("memo-checks").innerHTML = `<p class="muted">Checks run as soon as there is a memo.</p>`;
+      $("memo-text").innerHTML = `<p class="empty">${!navigator.gpu ? "This browser can't run the on-device model." : llm ? "Click <b>Write memo</b> to let the on-device model reword the outline." : "Load the model above, then click <b>Write memo</b>."}</p>
+        <button class="btn small" type="button" id="use-template">Use the code template instead</button>`;
+      $("use-template").addEventListener("click", () => document.querySelector('[data-writer="template"]').click());
+      $("memo-checks").innerHTML = `<p class="empty">Checks run as soon as there's a memo.</p>`;
       return;
     }
-    if ($("plant").checked && !streaming) {
+    let plantNote = "";
+    if (plant && !streaming) {
       const r = CAM.injectError(text);
       text = r.memo;
-      if (r.old) plantNote = `<p class="muted" style="font-size:13px">Planted: changed <b>${esc(r.old)}</b> to <b>${esc(r.wrong)}</b>.</p>`;
+      if (r.old) plantNote = `<p class="muted small">Planted: changed <b>${esc(r.old)}</b> to <b>${esc(r.wrong)}</b>.</p>`;
     }
     const c = CAM.checkMemo(text, ev, policy);
     $("memo-text").innerHTML = renderMemoMarkdown(text, c.unmatched.map((n) => n.number), streaming);
-    if (streaming) { $("memo-checks").innerHTML = `<p class="muted">Waiting for the model to finish…</p>`; return; }
+    if (streaming) { $("memo-checks").innerHTML = `<p class="empty">Waiting for the model to finish…</p>`; return; }
     const okN = c.numbers.filter((n) => n.ok).length;
-    $("memo-checks").innerHTML = plantNote + `
-      <div class="check-line"><span class="ic">${c.unmatched.length ? "❌" : "✅"}</span><div><b>Numbers:</b> ${okN} of ${c.numbers.length} match the calculated facts
-        ${c.unmatched.map((n) => `<div class="err"><b>${esc(n.number)}</b> is not in the facts.<br><small>${esc(n.sentence)}</small></div>`).join("")}</div></div>
-      <div class="check-line"><span class="ic">${c.uncited.length ? "❌" : "✅"}</span><div><b>Sources:</b> ${c.uncited.length ? `${c.uncited.length} sentence(s) cite no rule` : "every sentence cites a rule"}
-        ${c.uncited.map((s) => `<div class="warn">${esc(s)}</div>`).join("")}</div></div>
-      <div class="check-line"><span class="ic">${c.contradictions.length ? "❌" : "✅"}</span><div><b>Meaning:</b> ${c.contradictions.length ? `${c.contradictions.length} sentence(s) contradict a rule's result` : "no sentence contradicts a rule's result"}
-        ${c.contradictions.map((x) => `<div class="err">${esc(x.why)}.<br><small>${esc(x.sentence)}</small></div>`).join("")}</div></div>
-      <div class="check-line"><span class="ic">${c.recommendationOk ? "✅" : "❌"}</span><div><b>Outcome</b> ${c.recommendationOk ? "matches" : "does not match"} the rule engine ("${esc(ev.recommendation.label)}")
-        ${c.decisionConflicts.map((x) => `<div class="err">${esc(x.why)}.<br><small>${esc(x.sentence)}</small></div>`).join("")}</div></div>
-      ${c.placeholders.length ? `<div class="check-line"><span class="ic">❌</span><div><b>Unfilled placeholders:</b> ${esc(c.placeholders.join(", "))}</div></div>` : ""}
-      ${c.passed ? `<div class="ok">Memo passed every check. It can go to the reviewer.</div>` : `<div class="err">Memo blocked. Fix the flagged items before it reaches the reviewer.</div>`}`;
+    const line = (ok, title, body, items) => `<div class="check-line"><span class="ic" aria-hidden="true">${ok ? "✅" : "❌"}</span><div><b>${title}</b> ${body}${items || ""}</div></div>`;
+    $("memo-checks").innerHTML = plantNote
+      + line(!c.unmatched.length, "Numbers:", `${okN} of ${c.numbers.length} match the rule they cite`,
+        c.unmatched.map((n) => `<div class="err"><b>${esc(n.number)}</b> isn't a figure of the rule this sentence cites.<br><small>${esc(n.sentence)}</small></div>`).join(""))
+      + line(!c.contradictions.length, "Meaning:", c.contradictions.length ? `${c.contradictions.length} sentence(s) contradict a rule's result` : "no sentence contradicts a rule's result",
+        c.contradictions.map((x) => `<div class="err">${esc(x.why)}.<br><small>${esc(x.sentence)}</small></div>`).join(""))
+      + line(!c.uncited.length, "Sources:", c.uncited.length ? `${c.uncited.length} sentence(s) cite no rule` : "every sentence cites a rule",
+        c.uncited.map((s) => `<div class="warn">${esc(s)}</div>`).join(""))
+      + line(c.recommendationOk, "Outcome", `${c.recommendationOk ? "matches" : "doesn't match"} the rule engine ("${esc(ev.recommendation.label)}")`,
+        c.decisionConflicts.map((x) => `<div class="err">${esc(x.why)}.<br><small>${esc(x.sentence)}</small></div>`).join(""))
+      + (c.placeholders.length ? line(false, "Unfilled placeholders:", esc(c.placeholders.join(", "))) : "")
+      + (c.passed ? `<div class="ok">Passed every check. Ready for the reviewer.</div>` : `<div class="err">Blocked. Fix the flagged items before it reaches the reviewer.</div>`);
   }
 
   // ---------------- On-device AI (WebLLM) ----------------
@@ -1050,13 +1269,13 @@ MEMO:
   function showAiError(e) {
     busy = false;
     $("load-model").disabled = false;
-    $("ai-status").innerHTML = `<span style="color:var(--fail)">${esc(e.message || e)}</span>`;
+    $("ai-status").innerHTML = `<span style="color:var(--fail)">${esc(e.message || e)}</span> You can keep using the code template.`;
   }
 
   async function ensureModel() {
     const id = $("model").value;
     if (llm && llmModel === id) return;
-    if (!navigator.gpu) throw new Error("This browser doesn't support WebGPU. Try recent Chrome or Edge on a desktop.");
+    if (!navigator.gpu) throw new Error("This browser can't run the on-device model (no WebGPU).");
     $("load-model").disabled = true; $("write-ai").disabled = true;
     setProgress(0, "Loading the WebLLM library…");
     const webllm = await import(WEBLLM_URL);
@@ -1067,9 +1286,6 @@ MEMO:
     $("load-model").disabled = false; $("write-ai").disabled = false;
     renderMemoOutput();
   }
-
-  const MAX_TRIES = 3;
-  const TEMPERATURES = [0.2, 0.5, 0.8];  // a small model's later tries are more varied
 
   // The model rewords the code's outline. Code then fills every figure back in.
   async function generateMemo(id, temperature, onToken) {
@@ -1105,23 +1321,25 @@ MEMO:
     if (busy) return;
     await ensureModel();
     busy = true; $("write-ai").disabled = true;
-    const key = memoKey(id);
+    const key = sourceKey(id);
     try {
       const r = await writeChecked(id,
-        (n) => { $("ai-status").textContent = n === 1 ? "Writing on this device…" : `Try ${n} of ${MAX_TRIES}: the last draft was blocked by the checks, writing again…`; },
+        (n) => { $("ai-status").textContent = n === 1 ? "Writing on this device…" : `Try ${n} of ${MAX_TRIES}: the last draft was blocked, writing again…`; },
         (t) => { aiMemos[key] = t; if (current === id) renderMemoOutput(true); });
       aiMemos[key] = r.text;
+      aiMeta[key] = { model: llmModel, tries: r.tries, passed: r.check.passed };
+      delete memoEdits[key];
       $("ai-status").textContent = r.check.passed
         ? `Passed every check${r.tries > 1 ? ` on try ${r.tries} of ${MAX_TRIES}` : " on the first try"}.`
-        : `All ${MAX_TRIES} tries were blocked by the checks. The last draft is shown so you can see why. Switch to the template memo, or try again.`;
+        : `All ${MAX_TRIES} tries were blocked. The last draft is shown so you can see why. Use the code template, or try again.`;
     } finally {
       busy = false; $("write-ai").disabled = false;
     }
     renderMemoOutput();
   }
 
-  // ---------------- 4. How well it works ----------------
-  function renderAbout() {
+  // ---------------- How well it works ----------------
+  function renderHow() {
     let match = 0, total = 0;
     const rows = BASE.map((ev) => {
       const b = ev.borrower;
@@ -1129,8 +1347,11 @@ MEMO:
       const flagged = CAM.reviewQueue(ev).filter((r) => r.status !== "PASS").map((r) => `${r.id} ${CAM.STATUS_LABEL[r.status].toLowerCase()}`);
       return `<tr><td><b>${b.id}</b></td><td>${esc(b.planted_problem)}</td><td>${esc(flagged.join(", ") || "-")}</td></tr>`;
     }).join("");
-    $("eval-rules").innerHTML = `<p style="margin-top:0"><b>${match} of ${total}</b> rule results match answers I wrote by hand (12 files × 10 rules, original policy).
-      I wrote both the rules and the test files, so this mostly proves the engine does what I intended. Real files are messier.</p>
+    const kinds = BASE.flatMap((ev) => ev.results.map((r) => ev.borrower.expected[r.id]));
+    const k = (s) => kinds.filter((x) => x === s).length;
+    $("eval-rules").innerHTML = `<p><b>${match} of ${total}</b> rule results match answers written by hand (12 files × 10 rules, original policy):
+      ${k("FAIL")} fails, ${k("CANT_CHECK")} can't-checks and ${k("BORDERLINE")} borderline cases, plus ${k("PASS")} passes.
+      The same person wrote the rules and the test files, so this mostly shows the engine does what was intended. Real files are messier.</p>
       <div class="table-wrap"><table><thead><tr><th>File</th><th>Planted problem</th><th>Flagged</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     $("glossary").innerHTML = GLOSSARY.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("");
   }
@@ -1138,24 +1359,25 @@ MEMO:
   $("run-ai-test").addEventListener("click", async () => {
     const btn = $("run-ai-test");
     try {
-      if (!navigator.gpu) throw new Error("This browser doesn't support WebGPU. Try recent Chrome or Edge on a desktop.");
+      if (!navigator.gpu) throw new Error("This browser can't run the on-device model (no WebGPU). Try recent Chrome or Edge on a laptop.");
       if (busy) return;
       btn.disabled = true;
-      $("ai-test-status").textContent = "Loading model (see tab 3 for progress)…";
+      $("ai-test-status").textContent = "Loading the model…";
       writer = "ai";
       document.querySelectorAll("[data-writer]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.writer === "ai"));
-      $("ai-box").hidden = false;
       await ensureModel();
       busy = true;
       const results = [];
       for (const b of BORROWERS) {
         const n = results.length + 1;
         const r = await writeChecked(b.id, (t) => { $("ai-test-status").textContent = `Writing memo ${n} of ${BORROWERS.length}${t > 1 ? ` (try ${t})` : ""}…`; });
-        aiMemos[memoKey(b.id)] = r.text;
+        const key = sourceKey(b.id);
+        aiMemos[key] = r.text;
+        aiMeta[key] = { model: llmModel, tries: r.tries, passed: r.check.passed };
         results.push({ id: b.id, c: r.check, tries: r.tries });
         renderAiTest(results);
       }
-      $("ai-test-status").textContent = `Done with ${MODELS.find((m) => m[0] === llmModel)[1]}. Open any memo in tab 3 to see it.`;
+      $("ai-test-status").textContent = `Done with ${MODELS.find((m) => m[0] === llmModel)[1]}. Open any file in File review to read its memo.`;
     } catch (e) {
       $("ai-test-status").innerHTML = `<span style="color:var(--fail)">${esc(e.message || e)}</span>`;
     } finally {
@@ -1165,22 +1387,20 @@ MEMO:
 
   function renderAiTest(results) {
     const passed = results.filter((r) => r.c.passed).length;
+    const first = results.filter((r) => r.c.passed && r.tries === 1).length;
     const nums = results.reduce((s, r) => s + r.c.numbers.length, 0);
     const bad = results.reduce((s, r) => s + r.c.unmatched.length, 0);
     const unc = results.reduce((s, r) => s + r.c.uncited.length, 0);
-    const recBad = results.filter((r) => !r.c.recommendationOk || r.c.contradictions.length).length;
-    const first = results.filter((r) => r.c.passed && r.tries === 1).length;
-    $("ai-test").innerHTML = `<div class="chips" style="grid-template-columns:repeat(2,1fr)">
-      <div class="chip"><div class="n">${passed}/${results.length}</div><div class="l">memos passed every check (within ${MAX_TRIES} tries)</div></div>
+    $("ai-test").innerHTML = `<div class="chips" style="grid-template-columns:repeat(2,1fr);margin-top:12px">
+      <div class="chip"><div class="n">${passed}/${results.length}</div><div class="l">passed every check (within ${MAX_TRIES} tries)</div></div>
       <div class="chip"><div class="n">${first}/${results.length}</div><div class="l">passed on the first try</div></div>
-      <div class="chip"><div class="n">${bad}</div><div class="l">wrong numbers in the final drafts (of ${nums})</div></div>
-      <div class="chip"><div class="n">${unc}</div><div class="l">sentences with no source in the final drafts</div></div></div>
-      ${recBad ? `<p class="err">${recBad} memo(s) misstated a rule result or the outcome, and were blocked.</p>` : ""}
+      <div class="chip"><div class="n">${bad}</div><div class="l">wrong figures in final drafts (of ${nums})</div></div>
+      <div class="chip"><div class="n">${unc}</div><div class="l">unsourced sentences in final drafts</div></div></div>
       <div class="table-wrap"><table><thead><tr><th>File</th><th>Result</th><th>Tries</th><th>What the checks caught in the last draft</th></tr></thead><tbody>${
         results.map((r) => {
           const issues = [];
-          if (r.c.unmatched.length) issues.push(`wrong numbers: ${r.c.unmatched.map((n) => n.number).join(", ")}`);
-          if (r.c.uncited.length) issues.push(`${r.c.uncited.length} uncited sentence(s)`);
+          if (r.c.unmatched.length) issues.push(`wrong figures: ${r.c.unmatched.map((n) => n.number).join(", ")}`);
+          if (r.c.uncited.length) issues.push(`${r.c.uncited.length} unsourced sentence(s)`);
           if (r.c.contradictions.length) issues.push(`${r.c.contradictions.length} sentence(s) contradict a rule`);
           if (r.c.placeholders.length) issues.push(`unfilled ${r.c.placeholders.join(", ")}`);
           if (!r.c.recommendationOk) issues.push("outcome changed");
@@ -1191,7 +1411,7 @@ MEMO:
   // ---------------- Start ----------------
   renderPolicyRows();
   renderPortfolio();
-  renderAbout();
+  renderHow();
 })();
 
 </script>

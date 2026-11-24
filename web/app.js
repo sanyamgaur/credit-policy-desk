@@ -1,4 +1,4 @@
-/* UI for Credit Policy Desk. All decisions come from engine.js (window.CAM). */
+/* UI for Credit Policy Desk. Every decision comes from engine.js (window.CAM); this file only displays. */
 (function () {
   "use strict";
   const DATA = window.__DATA__;
@@ -11,15 +11,18 @@
     ["Qwen2.5-1.5B-Instruct-q4f16_1-MLC", "Qwen 2.5 · 1.5B · 880 MB (best writing)"],
   ];
   const ICON = { FAIL: "✕", CANT_CHECK: "?", BORDERLINE: "!", PASS: "✓" };
+  const COLUMN = { R1: "Age", R2: "Bureau", R3: "Late pay", R4: "DSCR", R5: "Debt / EBITDA", R6: "Current ratio",
+    R7: "GST gap", R8: "Bank / GST", R9: "Bounces", R10: "Docs" };
   const DECISIONS = ["Not reviewed yet", "Agree with the flag", "Asked borrower for documents",
     "Override: source data was wrong", "Override: approve as a deviation"];
-  const OUTCOMES = [["WITHIN_POLICY", "Within policy"], ["WITHIN_POLICY_REVIEW", "Borderline items"],
-    ["INCOMPLETE", "Incomplete file"], ["OUTSIDE_POLICY", "Outside policy"]];
+  const OUTCOMES = [["OUTSIDE_POLICY", "Outside policy"], ["INCOMPLETE", "Incomplete file"],
+    ["WITHIN_POLICY_REVIEW", "Borderline items"], ["WITHIN_POLICY", "Within policy"]];
+  const SEVERITY = { OUTSIDE_POLICY: 0, INCOMPLETE: 1, WITHIN_POLICY_REVIEW: 2, WITHIN_POLICY: 3 };
   const STEP = { x: 0.05, "%": 1, years: 0.5, days: 5, "": 1 };
-  const PRESETS = {
-    tight: { R2: 720, R4: 1.4, R5: 3.0, R6: 1.3, R7: 8 },
-    loose: { R2: 680, R4: 1.15, R5: 4.0, R8: 70 },
-  };
+  const PRESETS = { tight: { R2: 720, R4: 1.4, R5: 3.0, R6: 1.3, R7: 8 }, loose: { R2: 680, R4: 1.15, R5: 4.0, R8: 70 } };
+  const MAX_TRIES = 3;
+  const TEMPERATURES = [0.2, 0.5, 0.8];  // later tries are more varied
+  const STORE_KEY = "cpd.decisions.v1";
   const GLOSSARY = [
     ["CAM (Credit Assessment Memo)", "The document that explains why a loan should or shouldn't be approved."],
     ["Credit policy", "A lender's own rulebook for which loans it will give."],
@@ -39,43 +42,79 @@
   const $ = (id) => document.getElementById(id);
   const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
+  // ---------------- State ----------------
   let policy = clone(ORIGINAL);
-  let current = BORROWERS[0].id;
   let writer = "template";
-  const decisions = {};
-  const aiMemos = {};
+  let editing = false, plant = false;
   let llm = null, llmModel = null, busy = false;
+  const aiMemos = {}, aiMeta = {}, memoEdits = {};
+  const decisions = loadDecisions();
 
   const byId = (id) => BORROWERS.find((b) => b.id === id);
   const evalAll = (p) => BORROWERS.map((b) => CAM.evaluate(b, p));
   const BASE = evalAll(ORIGINAL);
-  const policyKey = () => JSON.stringify(policy.rules.map((r) => r.threshold).concat(policy.borderline_margin_pct));
-  const policyEdited = () => policyKey() !== JSON.stringify(ORIGINAL.rules.map((r) => r.threshold).concat(ORIGINAL.borderline_margin_pct));
+  const policyKey = (p = policy) => JSON.stringify(p.rules.map((r) => r.threshold).concat(p.borderline_margin_pct));
+  const policyEdited = () => policyKey() !== policyKey(ORIGINAL);
+  // Short, stable fingerprint of the policy, so each audit entry says which policy it was made under.
+  const policyVersion = () => {
+    if (!policyEdited()) return "original";
+    let h = 5381; for (const c of policyKey()) h = ((h * 33) ^ c.charCodeAt(0)) >>> 0;
+    return "edit-" + h.toString(16).slice(0, 6);
+  };
   const outcomeBadge = (rec) => `<span class="badge o-${rec.code}">${esc(rec.label)}</span>`;
   const label = (b) => `${b.id} · ${b.name} · ${b.industry}`;
+  const attentionOrder = (evs) => evs.slice().sort((a, b) =>
+    SEVERITY[a.recommendation.code] - SEVERITY[b.recommendation.code] || a.borrower.id.localeCompare(b.borrower.id));
+  let current = attentionOrder(BASE)[0].borrower.id;
 
-  // ---------------- Tabs ----------------
-  function showTab(name) {
-    document.querySelectorAll("nav.tabs button").forEach((b) => b.setAttribute("aria-selected", b.dataset.tab === name));
+  function loadDecisions() {
+    try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch (e) { return {}; }
+  }
+  function saveDecisions() {
+    try { localStorage.setItem(STORE_KEY, JSON.stringify(decisions)); } catch (e) { /* private mode: keep in memory */ }
+  }
+
+  // ---------------- Tabs (click + arrow keys) ----------------
+  const tabButtons = [...document.querySelectorAll('[role="tab"]')];
+  function showTab(name, focus = false) {
+    tabButtons.forEach((b) => {
+      const on = b.dataset.tab === name;
+      b.setAttribute("aria-selected", on);
+      b.tabIndex = on ? 0 : -1;
+      if (on && focus) b.focus();
+    });
     document.querySelectorAll("section.panel").forEach((s) => s.classList.toggle("active", s.id === `tab-${name}`));
     if (name === "review") renderReview();
-    if (name === "memo") renderMemo();
-    if (name === "about") renderAbout();
+    if (name === "how") renderHow();
   }
-  document.querySelectorAll("nav.tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
+  tabButtons.forEach((b, i) => {
+    b.addEventListener("click", () => showTab(b.dataset.tab));
+    b.addEventListener("keydown", (e) => {
+      const d = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+      if (d) { e.preventDefault(); showTab(tabButtons[(i + d + tabButtons.length) % tabButtons.length].dataset.tab, true); }
+    });
+  });
+  const goToTabs = () => document.querySelector(".tabs").scrollIntoView({ behavior: "smooth", block: "start" });
+  $("cta-review").addEventListener("click", () => { current = attentionOrder(evalAll(policy))[0].borrower.id; showTab("review"); goToTabs(); });
+  $("cta-book").addEventListener("click", () => { showTab("book"); goToTabs(); });
 
-  // ---------------- 1. Policy what-if ----------------
+  // ---------------- About dialog ----------------
+  const about = $("about");
+  $("open-about").addEventListener("click", () => about.showModal());
+  about.addEventListener("click", (e) => { if (e.target === about) about.close(); });  // click on backdrop closes
+
+  // ---------------- Loan book + policy what-if ----------------
   function renderPolicyRows() {
     $("policy-rows").innerHTML = policy.rules.map((r, i) => {
-      if (r.op === "==") return `<div class="rule-row"><label title="${esc(r.text)}"><span class="rid">${r.id}</span>${esc(r.short)}</label><span class="muted" style="font-size:13px">all required</span></div>`;
+      if (r.op === "==") return `<div class="rule-row"><label title="${esc(r.text)}"><span class="rid">${r.id}</span>${esc(r.short)}</label><span class="muted small">all required</span></div>`;
       const sym = r.op === ">=" ? "≥" : "≤";
       return `<div class="rule-row" id="row-${r.id}"><label for="th-${r.id}" title="${esc(r.text)}"><span class="rid">${r.id}</span>${esc(r.short)} <span class="op">${sym}${r.unit && r.unit !== "x" ? " " + esc(r.unit) : ""}</span></label>
-        <input type="number" id="th-${r.id}" data-i="${i}" step="${STEP[r.unit] ?? 1}" value="${r.threshold}"></div>`;
+        <input type="number" id="th-${r.id}" data-i="${i}" min="0" step="${STEP[r.unit] ?? 1}" value="${r.threshold}"></div>`;
     }).join("");
     $("margin").value = policy.borderline_margin_pct;
     $("policy-rows").querySelectorAll("input").forEach((inp) => inp.addEventListener("input", () => {
       const v = parseFloat(inp.value);
-      if (!Number.isFinite(v)) return;
+      if (!Number.isFinite(v) || v < 0) return;   // ignore half-typed or negative limits
       policy.rules[+inp.dataset.i].threshold = v;
       renderPortfolio();
     }));
@@ -83,7 +122,7 @@
   }
   $("margin").addEventListener("input", () => {
     const v = parseFloat($("margin").value);
-    if (!Number.isFinite(v) || v < 0) return;
+    if (!Number.isFinite(v) || v < 0 || v > 25) return;
     policy.borderline_margin_pct = v;
     renderPortfolio();
   });
@@ -94,6 +133,7 @@
     renderPolicyRows();
     renderPortfolio();
   }));
+  $("sort-attention").addEventListener("change", () => renderPortfolio());
   function markEdited() {
     policy.rules.forEach((r, i) => {
       const row = $(`row-${r.id}`);
@@ -104,6 +144,7 @@
   function renderPortfolio() {
     markEdited();
     const evs = evalAll(policy);
+    const baseOf = (id) => BASE.find((e) => e.borrower.id === id);
     const count = (list, code) => list.filter((e) => e.recommendation.code === code).length;
     $("chips").innerHTML = OUTCOMES.map(([code, name]) => {
       const n = count(evs, code), d = n - count(BASE, code);
@@ -112,153 +153,190 @@
       return `<div class="chip"><div class="n">${n}${d ? `<span class="d ${cls}">${d > 0 ? "+" : ""}${d}</span>` : ""}</div><div class="l"><span class="badge o-${code}">${name}</span></div></div>`;
     }).join("");
 
-    const head = `<thead><tr><th>Loan file</th>${policy.rules.map((r) => `<th class="c" title="${esc(r.short)}">${r.id}</th>`).join("")}<th>Outcome</th></tr></thead>`;
-    const rows = evs.map((ev, i) => {
-      const b = ev.borrower, moved = ev.recommendation.code !== BASE[i].recommendation.code;
-      const cells = ev.results.map((r) => `<td class="c"><span class="cell s-${r.status}" title="${esc(r.short)}: ${esc(CAM.STATUS_LABEL[r.status])} (${esc(r.value_display)})">${ICON[r.status]}</span></td>`).join("");
-      return `<tr data-id="${b.id}" class="${moved ? "moved" : ""}"><td><b>${b.id}</b> <span class="muted">${esc(b.industry)}</span></td>${cells}
-        <td>${outcomeBadge(ev.recommendation)}${moved ? `<span class="was">was: ${esc(BASE[i].recommendation.label)}</span>` : ""}</td></tr>`;
+    const ordered = $("sort-attention").checked ? attentionOrder(evs) : evs;
+    const head = `<thead><tr><th scope="col">Loan file</th>${policy.rules.map((r) => `<th scope="col" class="c" title="${esc(r.text)}">${esc(COLUMN[r.id] || r.id)}</th>`).join("")}<th scope="col">Outcome</th></tr></thead>`;
+    const rows = ordered.map((ev) => {
+      const b = ev.borrower, before = baseOf(b.id), moved = ev.recommendation.code !== before.recommendation.code;
+      const cells = ev.results.map((r) => `<td class="c"><span class="cell s-${r.status}" title="${esc(r.short)}: ${esc(CAM.STATUS_LABEL[r.status])} (${esc(r.value_display)})" aria-label="${esc(r.short)}: ${esc(CAM.STATUS_LABEL[r.status])}">${ICON[r.status]}</span></td>`).join("");
+      return `<tr class="${moved ? "moved" : ""}"><th scope="row"><button class="file-link" type="button" data-id="${esc(b.id)}"><b>${esc(b.id)}</b><span class="muted">${esc(b.industry)}</span></button></th>${cells}
+        <td>${outcomeBadge(ev.recommendation)}${moved ? `<span class="was">was: ${esc(before.recommendation.label)}</span>` : ""}</td></tr>`;
     }).join("");
     $("port").innerHTML = head + `<tbody>${rows}</tbody>`;
-    $("port").querySelectorAll("tbody tr").forEach((tr) => tr.addEventListener("click", () => {
-      current = tr.dataset.id;
-      showTab("review");
-      document.querySelector("nav.tabs").scrollIntoView({ behavior: "smooth" });
+    $("port").querySelectorAll(".file-link").forEach((btn) => btn.addEventListener("click", () => {
+      current = btn.dataset.id; showTab("review"); goToTabs();
     }));
 
-    const changes = [];
-    evs.forEach((ev, i) => {
-      const before = BASE[i];
-      const ruleMoves = ev.results.filter((r, j) => r.status !== before.results[j].status)
-        .map((r, _, arr) => `${r.id} ${esc(r.short)}: ${esc(r.value_display)} vs ${esc(r.threshold_display)}`);
-      if (ev.recommendation.code !== before.recommendation.code)
-        changes.push(`<li><b>${ev.borrower.id}</b> ${esc(before.recommendation.label)} → <b>${esc(ev.recommendation.label)}</b><br><small>${ruleMoves.join(" · ")}</small></li>`);
-    });
-    $("changes").innerHTML = !policyEdited() ? `<p class="muted" style="margin:0">This is the original policy. Try <b>Downturn: tighten</b> to see which files would no longer qualify.</p>`
-      : changes.length ? `<ul class="changes" style="padding-left:18px;margin:0">${changes.join("")}</ul>`
-      : `<p class="muted" style="margin:0">Policy edited, but no file changed its outcome.</p>`;
+    const changes = evs.map((ev) => {
+      const before = baseOf(ev.borrower.id);
+      if (ev.recommendation.code === before.recommendation.code) return "";
+      const moves = ev.results.filter((r, j) => r.status !== before.results[j].status)
+        .map((r) => `${r.id} ${esc(r.short)}: ${esc(r.value_display)} vs ${esc(r.threshold_display)}`);
+      return `<li><b>${ev.borrower.id}</b> ${esc(before.recommendation.label)} → <b>${esc(ev.recommendation.label)}</b><br><small class="muted">${moves.join(" · ")}</small></li>`;
+    }).join("");
+    $("changes").innerHTML = !policyEdited()
+      ? `<p class="empty">This is the original policy. Try <b>Downturn: tighten</b> to see which loans would no longer qualify, and why.</p>`
+      : changes ? `<ul class="changes">${changes}</ul>` : `<p class="empty">Policy edited, but no file changed its outcome.</p>`;
   }
 
-  // ---------------- 2. Review a file ----------------
-  function fillBorrowerSelect(sel) {
-    sel.innerHTML = BORROWERS.map((b) => `<option value="${b.id}">${esc(label(b))}</option>`).join("");
-    sel.value = current;
+  // ---------------- File review ----------------
+  function fillBorrowerSelect() {
+    $("borrower").innerHTML = attentionOrder(evalAll(policy)).map((ev) =>
+      `<option value="${esc(ev.borrower.id)}">${esc(label(ev.borrower))} — ${esc(ev.recommendation.label)}</option>`).join("");
+    $("borrower").value = current;
   }
   $("borrower").addEventListener("change", (e) => { current = e.target.value; renderReview(); });
+  function step(d) {
+    const ids = attentionOrder(evalAll(policy)).map((e) => e.borrower.id);
+    current = ids[(ids.indexOf(current) + d + ids.length) % ids.length];
+    renderReview();
+  }
+  $("prev-file").addEventListener("click", () => step(-1));
+  $("next-file").addEventListener("click", () => step(1));
+
+  const decisionKey = (rid) => `${current}:${rid}:${policyVersion()}`;
 
   function renderReview() {
-    fillBorrowerSelect($("borrower"));
+    editing = false;
+    fillBorrowerSelect();
     const b = byId(current), ev = CAM.evaluate(b, policy), q = CAM.reviewQueue(ev), lr = b.loan_request;
-    $("policy-note").innerHTML = policyEdited() ? `<div class="note">You are reviewing against your <b>edited</b> policy from tab 1.</div>` : "";
+    $("policy-note").innerHTML = policyEdited() ? `<div class="note">You're reviewing against your <b>edited</b> policy from the Loan book tab. Decisions are recorded against that policy version.</div>` : "";
     const n = (s) => q.filter((r) => r.status === s).length;
-    $("file-meta").innerHTML = `<div class="row" style="justify-content:space-between">
-      <div><h2>${esc(b.name)} <small style="font-weight:400">· ${esc(b.industry)}</small></h2>
-      <small>Asks for Rs ${lr.amount_lakh} lakh over ${lr.tenure_months} months at ${lr.annual_rate_pct}%</small></div>
+    $("file-meta").innerHTML = `<div><h2>${esc(b.name)} <small class="muted" style="font-weight:400">· ${esc(b.industry)}</small></h2>
+      <p class="muted small" style="margin:4px 0 0">Asks for Rs ${lr.amount_lakh} lakh over ${lr.tenure_months} months at ${lr.annual_rate_pct}%. ${esc(ev.recommendation.explain)}</p></div>
       <div class="counts">${outcomeBadge(ev.recommendation)}
-      <span class="badge s-FAIL">${n("FAIL")} fail</span><span class="badge s-CANT_CHECK">${n("CANT_CHECK")} can't check</span>
-      <span class="badge s-BORDERLINE">${n("BORDERLINE")} borderline</span></div></div>
-      <p style="margin:8px 0 0;font-size:13.5px" class="muted">${esc(ev.recommendation.explain)}</p>`;
+        ${n("FAIL") ? `<span class="badge s-FAIL">${n("FAIL")} fail</span>` : ""}${n("CANT_CHECK") ? `<span class="badge s-CANT_CHECK">${n("CANT_CHECK")} can't check</span>` : ""}${n("BORDERLINE") ? `<span class="badge s-BORDERLINE">${n("BORDERLINE")} borderline</span>` : ""}</div>`;
     $("planted").textContent = b.planted_problem;
 
-    const flagged = q.filter((r) => r.status !== "PASS");
-    const html = (flagged.length ? "" : `<div class="ok" style="margin-top:10px">Nothing to check first: every rule passes comfortably.</div>`)
-      + q.map((r) => ruleCard(r, r.status !== "PASS")).join("");
-    $("queue").innerHTML = html;
-    $("queue").querySelectorAll("[data-key]").forEach(wireDecision);
+    const flagged = q.filter((r) => r.status !== "PASS"), passing = q.filter((r) => r.status === "PASS");
+    $("queue").innerHTML = (flagged.length ? flagged.map((r) => ruleCard(r, true)).join("")
+      : `<div class="ok">Nothing to check first: every rule passes comfortably.</div>`)
+      + (passing.length ? `<p class="passing-head">Passing rules (${passing.length})</p>` + passing.map((r) => ruleCard(r, false)).join("") : "");
+    $("queue").querySelectorAll("[data-rid]").forEach(wireDecision);
+    renderProgress();
+    renderMemo();
     renderAudit();
   }
 
   const edited = (r) => ORIGINAL.rules.find((o) => o.id === r.id).threshold !== r.threshold;
 
   function ruleCard(r, open) {
-    const key = `${current}:${r.id}`;
-    const d = decisions[key] || { decision: DECISIONS[0], reason: "" };
+    const d = decisions[decisionKey(r.id)];
     const inputs = r.inputs.length ? `<div class="table-wrap"><table><thead><tr><th>Input</th><th>Value</th><th>Where it came from</th></tr></thead><tbody>${
       r.inputs.map((i) => `<tr><td>${esc(i.label)}</td><td>${esc(typeof i.value === "number" ? CAM.fmt(i.value, i.unit) : i.value)}</td><td>${esc(i.source)}</td></tr>`).join("")}</tbody></table></div>` : "";
-    const decide = r.status === "PASS" ? "" : `<div class="decide" data-key="${key}">
-      <div><label>Reviewer decision</label><select>${DECISIONS.map((x) => `<option ${x === d.decision ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
-      <div><label>Reason (needed for any override)</label><input type="text" value="${esc(d.reason)}" placeholder="e.g. Promoter brought in Rs 40 lakh fresh equity"></div>
+    const decide = r.status === "PASS" ? "" : `<div class="decide" data-rid="${r.id}">
+      <div><label for="dec-${r.id}">Reviewer decision</label><select id="dec-${r.id}">${DECISIONS.map((x) => `<option ${d && x === d.decision ? "selected" : ""}>${esc(x)}</option>`).join("")}</select></div>
+      <div><label for="why-${r.id}">Reason (needed for any override)</label><input id="why-${r.id}" type="text" value="${esc(d ? d.reason : "")}" placeholder="e.g. Promoter brought in Rs 40 lakh fresh equity"></div>
       <div class="err" hidden style="grid-column:1/-1">An override needs a written reason. Nothing is recorded until you add one.</div></div>`;
-    return `<details class="rule" ${open ? "open" : ""}><summary><span class="cell s-${r.status}">${ICON[r.status]}</span>
+    return `<details class="rule" ${open ? "open" : ""}><summary><span class="cell s-${r.status}" aria-hidden="true">${ICON[r.status]}</span>
       <span class="title">${r.id} · ${esc(r.short)}</span><span class="badge s-${r.status}">${esc(CAM.STATUS_LABEL[r.status])}</span>
-      <span class="val">${esc(r.value_display)} · policy: ${esc(r.threshold_display)}</span></summary>
-      <div class="body"><p><b>Rule:</b> ${esc(r.text)}${edited(r) ? ` <span class="badge" style="background:var(--accent-soft);color:var(--accent)">Edited in tab 1: now ${esc(r.threshold_display)}</span>` : ""}</p>${r.reason ? `<div class="warn">${esc(r.reason)}</div>` : ""}
+      <span class="val">${esc(r.value_display)} · policy: ${esc(r.threshold_display)}</span>${d ? `<span class="decided" id="done-${r.id}">✓ decided</span>` : `<span class="decided" id="done-${r.id}"></span>`}</summary>
+      <div class="body"><p><b>Rule:</b> ${esc(r.text)}${edited(r) ? ` <span class="badge" style="background:var(--accent-soft);color:var(--accent)">Edited: now ${esc(r.threshold_display)}</span>` : ""}</p>${r.reason ? `<div class="warn">${esc(r.reason)}</div>` : ""}
       ${inputs}${r.how ? `<p><b>Calculation:</b> <code>${esc(r.how)}</code> = <b>${esc(r.value_display)}</b></p>` : ""}${decide}</div></details>`;
   }
 
   function wireDecision(box) {
-    const key = box.dataset.key, sel = box.querySelector("select"), txt = box.querySelector("input"), err = box.querySelector(".err");
+    const rid = box.dataset.rid, sel = box.querySelector("select"), txt = box.querySelector("input"), err = box.querySelector(".err");
+    const ev = CAM.evaluate(byId(current), policy), r = ev.results.find((x) => x.id === rid);
     const update = () => {
+      const key = decisionKey(rid);
       const missingReason = sel.value.startsWith("Override") && !txt.value.trim();
       err.hidden = !missingReason;
-      // An override is only recorded once it has a written reason.
-      if (missingReason) delete decisions[key];
-      else decisions[key] = { decision: sel.value, reason: txt.value.trim(), at: new Date().toISOString() };
+      if (missingReason || sel.value === DECISIONS[0]) delete decisions[key];   // overrides need a reason
+      else decisions[key] = { file: current, rule: rid, decision: sel.value, reason: txt.value.trim(),
+        value: r.value_display, policy: policyVersion(), at: new Date().toISOString() };
+      saveDecisions();
+      $(`done-${rid}`).textContent = decisions[key] ? "✓ decided" : "";
+      renderProgress();
       renderAudit();
     };
     sel.addEventListener("change", update);
     txt.addEventListener("input", update);
-    update();
   }
 
-  function auditRows() {
-    return Object.entries(decisions).filter(([, v]) => v.decision !== DECISIONS[0])
-      .map(([k, v]) => ({ file: k.split(":")[0], rule: k.split(":")[1], ...v }));
+  function renderProgress() {
+    const ev = CAM.evaluate(byId(current), policy);
+    const flagged = ev.results.filter((r) => r.status !== "PASS");
+    const done = flagged.filter((r) => decisions[decisionKey(r.id)]).length;
+    $("progress-note").textContent = flagged.length ? `${done} of ${flagged.length} flagged rules decided` : "";
   }
+
   function renderAudit() {
-    const rows = auditRows();
-    $("audit").innerHTML = rows.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th>File</th><th>Rule</th><th>Decision</th><th>Reason</th></tr></thead><tbody>${
-      rows.map((r) => `<tr><td>${esc(new Date(r.at).toLocaleTimeString())}</td><td>${esc(r.file)}</td><td>${esc(r.rule)}</td><td>${esc(r.decision)}</td><td>${esc(r.reason)}</td></tr>`).join("")}</tbody></table></div>
-      <div class="btns"><button class="btn" id="dl-audit">Download audit log (CSV)</button></div>`
-      : `<p class="muted" style="margin:0">No decisions recorded yet. Every decision and its reason lands here.</p>`;
-    const dl = $("dl-audit");
-    if (dl) dl.addEventListener("click", () => {
+    const rows = Object.values(decisions).sort((a, b) => b.at.localeCompare(a.at));
+    $("audit").innerHTML = rows.length ? `<div class="table-wrap"><table><thead><tr><th>Time</th><th>File</th><th>Rule</th><th>Value then</th><th>Decision</th><th>Reason</th><th>Policy</th></tr></thead><tbody>${
+      rows.map((r) => `<tr><td>${esc(new Date(r.at).toLocaleString())}</td><td>${esc(r.file)}</td><td>${esc(r.rule)}</td><td>${esc(r.value)}</td><td>${esc(r.decision)}</td><td>${esc(r.reason)}</td><td>${esc(r.policy)}</td></tr>`).join("")}</tbody></table></div>
+      <div class="btns" style="margin-top:10px"><button class="btn small" id="dl-audit" type="button">Download CSV</button><button class="btn small ghost" id="clear-audit" type="button">Clear log</button></div>`
+      : `<p class="empty">No decisions yet. Choose a decision on any flagged rule above and it's recorded here with the time, the value at that moment and the policy version.</p>`;
+    if (!rows.length) return;
+    $("dl-audit").addEventListener("click", () => {
       // Quote every cell, and stop spreadsheet apps running text that starts like a formula.
       const q = (s) => { let t = String(s ?? ""); if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; return `"${t.replace(/"/g, '""')}"`; };
-      const csv = ["Time,File,Rule,Decision,Reason", ...rows.map((r) => [r.at, r.file, r.rule, r.decision, r.reason].map(q).join(","))].join("\n");
+      const csv = ["Time,File,Rule,Value then,Decision,Reason,Policy",
+        ...rows.map((r) => [r.at, r.file, r.rule, r.value, r.decision, r.reason, r.policy].map(q).join(","))].join("\n");
       const a = Object.assign(document.createElement("a"), { href: URL.createObjectURL(new Blob([csv], { type: "text/csv" })), download: "audit_log.csv" });
       a.click();
     });
+    $("clear-audit").addEventListener("click", () => {
+      if (!confirm("Clear every recorded decision from this browser?")) return;
+      Object.keys(decisions).forEach((k) => delete decisions[k]);
+      saveDecisions();
+      renderReview();
+    });
   }
 
-  // ---------------- 3. Memo ----------------
+  // ---------------- Memo ----------------
   $("model").innerHTML = MODELS.map(([id, name]) => `<option value="${id}">${esc(name)}</option>`).join("");
-  $("memo-borrower").addEventListener("change", (e) => { current = e.target.value; renderMemo(); });
   document.querySelectorAll("[data-writer]").forEach((btn) => btn.addEventListener("click", () => {
     writer = btn.dataset.writer;
     document.querySelectorAll("[data-writer]").forEach((b) => b.setAttribute("aria-pressed", b === btn));
+    editing = false;
     renderMemo();
   }));
-  $("plant").addEventListener("change", () => renderMemoOutput());
+  $("plant").addEventListener("click", () => {
+    plant = !plant;
+    $("plant").setAttribute("aria-pressed", plant);
+    $("plant").textContent = plant ? "Remove the planted number" : "Test the checker: plant a wrong number";
+    renderMemoOutput();
+  });
   $("load-model").addEventListener("click", () => ensureModel().catch(showAiError));
   $("write-ai").addEventListener("click", () => writeAiMemo(current).catch(showAiError));
-  $("model").addEventListener("change", () => { $("write-ai").disabled = !(llm && llmModel === $("model").value); });
+  $("model").addEventListener("change", () => { $("write-ai").disabled = !(llm && llmModel === $("model").value); renderMemoOutput(); });
+  $("edit-memo").addEventListener("click", () => {
+    editing = !editing;
+    if (editing) $("memo-editor").value = currentMemoText();
+    renderMemoOutput();
+    if (editing) $("memo-editor").focus();
+  });
+  $("memo-editor").addEventListener("input", () => { memoEdits[memoKey()] = $("memo-editor").value; renderMemoOutput(); });
+  $("reset-memo").addEventListener("click", () => { delete memoEdits[memoKey()]; editing = false; renderMemoOutput(); });
 
-  const memoKey = (id) => `${id}|${llmModel}|${policyKey()}`;
+  const sourceKey = (id = current) => `${writer}|${writer === "ai" ? llmModel : ""}|${id}|${policyKey()}`;
+  const memoKey = () => sourceKey();
 
   function renderMemo() {
-    fillBorrowerSelect($("memo-borrower"));
     $("ai-box").hidden = writer !== "ai";
-    if (writer === "ai" && !navigator.gpu) {
-      $("ai-status").innerHTML = "This browser doesn't support WebGPU, so the model can't run here. Try recent Chrome or Edge on a desktop. The template memo and all checks still work.";
-      $("load-model").disabled = true;
-    } else if (writer === "ai" && !llm) {
-      $("ai-status").textContent = "The model downloads once, then stays cached in this browser for next time. Your data is never sent to a server.";
+    if (writer === "ai") {
+      if (!navigator.gpu) {
+        $("ai-status").textContent = "This browser can't run the on-device model (no WebGPU). Try recent Chrome or Edge on a laptop. The code template and every check still work.";
+        $("load-model").disabled = true;
+      } else if (!llm) {
+        $("ai-status").textContent = "The model downloads once (290 MB for the smallest), then loads from this browser in seconds. Nothing is sent to a server.";
+      }
     }
     renderMemoOutput();
   }
 
-  function currentMemoText() {
-    if (writer === "template") return CAM.templateMemo(CAM.evaluate(byId(current), policy));
-    return aiMemos[memoKey(current)] || "";
+  function sourceText(id = current) {
+    if (writer === "template") return CAM.templateMemo(CAM.evaluate(byId(id), policy));
+    return aiMemos[sourceKey(id)] || "";
   }
+  function currentMemoText() { return memoEdits[memoKey()] ?? sourceText(); }
 
   function renderMemoMarkdown(text, bad, streaming) {
     let html = text.split("\n").filter((l) => l.trim()).map((line) => {
       let s = esc(line.trim());
       s = s.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>");
       for (const n of bad) {
-        const re = new RegExp(`(?<![\\d.,])${n.replace(/[.,]/g, (c) => "\\" + c)}(?![\\d])`);
+        const re = new RegExp(`(?<![\\d.,])${n.replace(/[.,\-]/g, (c) => "\\" + c)}(?![\\d])`);
         s = s.replace(re, `<mark class="bad">${n}</mark>`);
       }
       s = s.replace(/\[((?:R\d+|APP|POLICY)(?:\s*,\s*(?:R\d+|APP|POLICY))*)\]/g, '<span class="tag">$1</span>');
@@ -268,35 +346,54 @@
     return html;
   }
 
+  function provenance() {
+    const meta = aiMeta[sourceKey()];
+    let s = writer === "template" ? "<b>Code template</b> · written entirely by code"
+      : meta ? `<b>Reworded by ${esc(MODELS.find((m) => m[0] === meta.model)[1].split(" · ").slice(0, 2).join(" "))}</b> on this device · figures filled in by code · ${meta.passed ? (meta.tries > 1 ? `passed on try ${meta.tries}` : "passed first try") : `blocked after ${meta.tries} tries`}`
+      : "<b>On-device AI</b>";
+    if (memoEdits[memoKey()] !== undefined) s += " · <b>edited by reviewer</b>";
+    return s;
+  }
+
   function renderMemoOutput(streaming = false) {
     const ev = CAM.evaluate(byId(current), policy);
     let text = currentMemoText();
-    let plantNote = "";
+    $("provenance").innerHTML = provenance();
+    $("edit-memo").textContent = editing ? "Done" : "Edit";
+    $("edit-memo").disabled = !text || streaming;
+    $("reset-memo").hidden = memoEdits[memoKey()] === undefined;
+    $("memo-editor").hidden = !editing;
+    $("memo-text").hidden = editing;
+    $("plant").disabled = !text || streaming;
     if (!text) {
-      $("memo-text").innerHTML = `<p class="muted">${llm ? "Click <b>Write memo</b> to let the on-device model draft it." : "Load a model, then click <b>Write memo</b>."}</p>`;
-      $("memo-checks").innerHTML = `<p class="muted">Checks run as soon as there is a memo.</p>`;
+      $("memo-text").innerHTML = `<p class="empty">${!navigator.gpu ? "This browser can't run the on-device model." : llm ? "Click <b>Write memo</b> to let the on-device model reword the outline." : "Load the model above, then click <b>Write memo</b>."}</p>
+        <button class="btn small" type="button" id="use-template">Use the code template instead</button>`;
+      $("use-template").addEventListener("click", () => document.querySelector('[data-writer="template"]').click());
+      $("memo-checks").innerHTML = `<p class="empty">Checks run as soon as there's a memo.</p>`;
       return;
     }
-    if ($("plant").checked && !streaming) {
+    let plantNote = "";
+    if (plant && !streaming) {
       const r = CAM.injectError(text);
       text = r.memo;
-      if (r.old) plantNote = `<p class="muted" style="font-size:13px">Planted: changed <b>${esc(r.old)}</b> to <b>${esc(r.wrong)}</b>.</p>`;
+      if (r.old) plantNote = `<p class="muted small">Planted: changed <b>${esc(r.old)}</b> to <b>${esc(r.wrong)}</b>.</p>`;
     }
     const c = CAM.checkMemo(text, ev, policy);
     $("memo-text").innerHTML = renderMemoMarkdown(text, c.unmatched.map((n) => n.number), streaming);
-    if (streaming) { $("memo-checks").innerHTML = `<p class="muted">Waiting for the model to finish…</p>`; return; }
+    if (streaming) { $("memo-checks").innerHTML = `<p class="empty">Waiting for the model to finish…</p>`; return; }
     const okN = c.numbers.filter((n) => n.ok).length;
-    $("memo-checks").innerHTML = plantNote + `
-      <div class="check-line"><span class="ic">${c.unmatched.length ? "❌" : "✅"}</span><div><b>Numbers:</b> ${okN} of ${c.numbers.length} match the calculated facts
-        ${c.unmatched.map((n) => `<div class="err"><b>${esc(n.number)}</b> is not in the facts.<br><small>${esc(n.sentence)}</small></div>`).join("")}</div></div>
-      <div class="check-line"><span class="ic">${c.uncited.length ? "❌" : "✅"}</span><div><b>Sources:</b> ${c.uncited.length ? `${c.uncited.length} sentence(s) cite no rule` : "every sentence cites a rule"}
-        ${c.uncited.map((s) => `<div class="warn">${esc(s)}</div>`).join("")}</div></div>
-      <div class="check-line"><span class="ic">${c.contradictions.length ? "❌" : "✅"}</span><div><b>Meaning:</b> ${c.contradictions.length ? `${c.contradictions.length} sentence(s) contradict a rule's result` : "no sentence contradicts a rule's result"}
-        ${c.contradictions.map((x) => `<div class="err">${esc(x.why)}.<br><small>${esc(x.sentence)}</small></div>`).join("")}</div></div>
-      <div class="check-line"><span class="ic">${c.recommendationOk ? "✅" : "❌"}</span><div><b>Outcome</b> ${c.recommendationOk ? "matches" : "does not match"} the rule engine ("${esc(ev.recommendation.label)}")
-        ${c.decisionConflicts.map((x) => `<div class="err">${esc(x.why)}.<br><small>${esc(x.sentence)}</small></div>`).join("")}</div></div>
-      ${c.placeholders.length ? `<div class="check-line"><span class="ic">❌</span><div><b>Unfilled placeholders:</b> ${esc(c.placeholders.join(", "))}</div></div>` : ""}
-      ${c.passed ? `<div class="ok">Memo passed every check. It can go to the reviewer.</div>` : `<div class="err">Memo blocked. Fix the flagged items before it reaches the reviewer.</div>`}`;
+    const line = (ok, title, body, items) => `<div class="check-line"><span class="ic" aria-hidden="true">${ok ? "✅" : "❌"}</span><div><b>${title}</b> ${body}${items || ""}</div></div>`;
+    $("memo-checks").innerHTML = plantNote
+      + line(!c.unmatched.length, "Numbers:", `${okN} of ${c.numbers.length} match the rule they cite`,
+        c.unmatched.map((n) => `<div class="err"><b>${esc(n.number)}</b> isn't a figure of the rule this sentence cites.<br><small>${esc(n.sentence)}</small></div>`).join(""))
+      + line(!c.contradictions.length, "Meaning:", c.contradictions.length ? `${c.contradictions.length} sentence(s) contradict a rule's result` : "no sentence contradicts a rule's result",
+        c.contradictions.map((x) => `<div class="err">${esc(x.why)}.<br><small>${esc(x.sentence)}</small></div>`).join(""))
+      + line(!c.uncited.length, "Sources:", c.uncited.length ? `${c.uncited.length} sentence(s) cite no rule` : "every sentence cites a rule",
+        c.uncited.map((s) => `<div class="warn">${esc(s)}</div>`).join(""))
+      + line(c.recommendationOk, "Outcome", `${c.recommendationOk ? "matches" : "doesn't match"} the rule engine ("${esc(ev.recommendation.label)}")`,
+        c.decisionConflicts.map((x) => `<div class="err">${esc(x.why)}.<br><small>${esc(x.sentence)}</small></div>`).join(""))
+      + (c.placeholders.length ? line(false, "Unfilled placeholders:", esc(c.placeholders.join(", "))) : "")
+      + (c.passed ? `<div class="ok">Passed every check. Ready for the reviewer.</div>` : `<div class="err">Blocked. Fix the flagged items before it reaches the reviewer.</div>`);
   }
 
   // ---------------- On-device AI (WebLLM) ----------------
@@ -308,13 +405,13 @@
   function showAiError(e) {
     busy = false;
     $("load-model").disabled = false;
-    $("ai-status").innerHTML = `<span style="color:var(--fail)">${esc(e.message || e)}</span>`;
+    $("ai-status").innerHTML = `<span style="color:var(--fail)">${esc(e.message || e)}</span> You can keep using the code template.`;
   }
 
   async function ensureModel() {
     const id = $("model").value;
     if (llm && llmModel === id) return;
-    if (!navigator.gpu) throw new Error("This browser doesn't support WebGPU. Try recent Chrome or Edge on a desktop.");
+    if (!navigator.gpu) throw new Error("This browser can't run the on-device model (no WebGPU).");
     $("load-model").disabled = true; $("write-ai").disabled = true;
     setProgress(0, "Loading the WebLLM library…");
     const webllm = await import(WEBLLM_URL);
@@ -325,9 +422,6 @@
     $("load-model").disabled = false; $("write-ai").disabled = false;
     renderMemoOutput();
   }
-
-  const MAX_TRIES = 3;
-  const TEMPERATURES = [0.2, 0.5, 0.8];  // a small model's later tries are more varied
 
   // The model rewords the code's outline. Code then fills every figure back in.
   async function generateMemo(id, temperature, onToken) {
@@ -363,23 +457,25 @@
     if (busy) return;
     await ensureModel();
     busy = true; $("write-ai").disabled = true;
-    const key = memoKey(id);
+    const key = sourceKey(id);
     try {
       const r = await writeChecked(id,
-        (n) => { $("ai-status").textContent = n === 1 ? "Writing on this device…" : `Try ${n} of ${MAX_TRIES}: the last draft was blocked by the checks, writing again…`; },
+        (n) => { $("ai-status").textContent = n === 1 ? "Writing on this device…" : `Try ${n} of ${MAX_TRIES}: the last draft was blocked, writing again…`; },
         (t) => { aiMemos[key] = t; if (current === id) renderMemoOutput(true); });
       aiMemos[key] = r.text;
+      aiMeta[key] = { model: llmModel, tries: r.tries, passed: r.check.passed };
+      delete memoEdits[key];
       $("ai-status").textContent = r.check.passed
         ? `Passed every check${r.tries > 1 ? ` on try ${r.tries} of ${MAX_TRIES}` : " on the first try"}.`
-        : `All ${MAX_TRIES} tries were blocked by the checks. The last draft is shown so you can see why. Switch to the template memo, or try again.`;
+        : `All ${MAX_TRIES} tries were blocked. The last draft is shown so you can see why. Use the code template, or try again.`;
     } finally {
       busy = false; $("write-ai").disabled = false;
     }
     renderMemoOutput();
   }
 
-  // ---------------- 4. How well it works ----------------
-  function renderAbout() {
+  // ---------------- How well it works ----------------
+  function renderHow() {
     let match = 0, total = 0;
     const rows = BASE.map((ev) => {
       const b = ev.borrower;
@@ -387,8 +483,11 @@
       const flagged = CAM.reviewQueue(ev).filter((r) => r.status !== "PASS").map((r) => `${r.id} ${CAM.STATUS_LABEL[r.status].toLowerCase()}`);
       return `<tr><td><b>${b.id}</b></td><td>${esc(b.planted_problem)}</td><td>${esc(flagged.join(", ") || "-")}</td></tr>`;
     }).join("");
-    $("eval-rules").innerHTML = `<p style="margin-top:0"><b>${match} of ${total}</b> rule results match answers I wrote by hand (12 files × 10 rules, original policy).
-      I wrote both the rules and the test files, so this mostly proves the engine does what I intended. Real files are messier.</p>
+    const kinds = BASE.flatMap((ev) => ev.results.map((r) => ev.borrower.expected[r.id]));
+    const k = (s) => kinds.filter((x) => x === s).length;
+    $("eval-rules").innerHTML = `<p><b>${match} of ${total}</b> rule results match answers written by hand (12 files × 10 rules, original policy):
+      ${k("FAIL")} fails, ${k("CANT_CHECK")} can't-checks and ${k("BORDERLINE")} borderline cases, plus ${k("PASS")} passes.
+      The same person wrote the rules and the test files, so this mostly shows the engine does what was intended. Real files are messier.</p>
       <div class="table-wrap"><table><thead><tr><th>File</th><th>Planted problem</th><th>Flagged</th></tr></thead><tbody>${rows}</tbody></table></div>`;
     $("glossary").innerHTML = GLOSSARY.map(([t, d]) => `<dt>${esc(t)}</dt><dd>${esc(d)}</dd>`).join("");
   }
@@ -396,24 +495,25 @@
   $("run-ai-test").addEventListener("click", async () => {
     const btn = $("run-ai-test");
     try {
-      if (!navigator.gpu) throw new Error("This browser doesn't support WebGPU. Try recent Chrome or Edge on a desktop.");
+      if (!navigator.gpu) throw new Error("This browser can't run the on-device model (no WebGPU). Try recent Chrome or Edge on a laptop.");
       if (busy) return;
       btn.disabled = true;
-      $("ai-test-status").textContent = "Loading model (see tab 3 for progress)…";
+      $("ai-test-status").textContent = "Loading the model…";
       writer = "ai";
       document.querySelectorAll("[data-writer]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.writer === "ai"));
-      $("ai-box").hidden = false;
       await ensureModel();
       busy = true;
       const results = [];
       for (const b of BORROWERS) {
         const n = results.length + 1;
         const r = await writeChecked(b.id, (t) => { $("ai-test-status").textContent = `Writing memo ${n} of ${BORROWERS.length}${t > 1 ? ` (try ${t})` : ""}…`; });
-        aiMemos[memoKey(b.id)] = r.text;
+        const key = sourceKey(b.id);
+        aiMemos[key] = r.text;
+        aiMeta[key] = { model: llmModel, tries: r.tries, passed: r.check.passed };
         results.push({ id: b.id, c: r.check, tries: r.tries });
         renderAiTest(results);
       }
-      $("ai-test-status").textContent = `Done with ${MODELS.find((m) => m[0] === llmModel)[1]}. Open any memo in tab 3 to see it.`;
+      $("ai-test-status").textContent = `Done with ${MODELS.find((m) => m[0] === llmModel)[1]}. Open any file in File review to read its memo.`;
     } catch (e) {
       $("ai-test-status").innerHTML = `<span style="color:var(--fail)">${esc(e.message || e)}</span>`;
     } finally {
@@ -423,22 +523,20 @@
 
   function renderAiTest(results) {
     const passed = results.filter((r) => r.c.passed).length;
+    const first = results.filter((r) => r.c.passed && r.tries === 1).length;
     const nums = results.reduce((s, r) => s + r.c.numbers.length, 0);
     const bad = results.reduce((s, r) => s + r.c.unmatched.length, 0);
     const unc = results.reduce((s, r) => s + r.c.uncited.length, 0);
-    const recBad = results.filter((r) => !r.c.recommendationOk || r.c.contradictions.length).length;
-    const first = results.filter((r) => r.c.passed && r.tries === 1).length;
-    $("ai-test").innerHTML = `<div class="chips" style="grid-template-columns:repeat(2,1fr)">
-      <div class="chip"><div class="n">${passed}/${results.length}</div><div class="l">memos passed every check (within ${MAX_TRIES} tries)</div></div>
+    $("ai-test").innerHTML = `<div class="chips" style="grid-template-columns:repeat(2,1fr);margin-top:12px">
+      <div class="chip"><div class="n">${passed}/${results.length}</div><div class="l">passed every check (within ${MAX_TRIES} tries)</div></div>
       <div class="chip"><div class="n">${first}/${results.length}</div><div class="l">passed on the first try</div></div>
-      <div class="chip"><div class="n">${bad}</div><div class="l">wrong numbers in the final drafts (of ${nums})</div></div>
-      <div class="chip"><div class="n">${unc}</div><div class="l">sentences with no source in the final drafts</div></div></div>
-      ${recBad ? `<p class="err">${recBad} memo(s) misstated a rule result or the outcome, and were blocked.</p>` : ""}
+      <div class="chip"><div class="n">${bad}</div><div class="l">wrong figures in final drafts (of ${nums})</div></div>
+      <div class="chip"><div class="n">${unc}</div><div class="l">unsourced sentences in final drafts</div></div></div>
       <div class="table-wrap"><table><thead><tr><th>File</th><th>Result</th><th>Tries</th><th>What the checks caught in the last draft</th></tr></thead><tbody>${
         results.map((r) => {
           const issues = [];
-          if (r.c.unmatched.length) issues.push(`wrong numbers: ${r.c.unmatched.map((n) => n.number).join(", ")}`);
-          if (r.c.uncited.length) issues.push(`${r.c.uncited.length} uncited sentence(s)`);
+          if (r.c.unmatched.length) issues.push(`wrong figures: ${r.c.unmatched.map((n) => n.number).join(", ")}`);
+          if (r.c.uncited.length) issues.push(`${r.c.uncited.length} unsourced sentence(s)`);
           if (r.c.contradictions.length) issues.push(`${r.c.contradictions.length} sentence(s) contradict a rule`);
           if (r.c.placeholders.length) issues.push(`unfilled ${r.c.placeholders.join(", ")}`);
           if (!r.c.recommendationOk) issues.push("outcome changed");
@@ -449,5 +547,5 @@
   // ---------------- Start ----------------
   renderPolicyRows();
   renderPortfolio();
-  renderAbout();
+  renderHow();
 })();
