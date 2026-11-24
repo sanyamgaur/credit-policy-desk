@@ -170,7 +170,8 @@ table.port tr.moved { background: var(--accent-soft); }
 .changes li { margin: 6px 0; font-size: 14px; }
 
 /* ---------- File review ---------- */
-.file-bar .row select { flex: 1 1 260px; width: auto; }
+.file-bar .row { flex-wrap: nowrap; }
+.file-bar .row select { flex: 1 1 0; min-width: 0; width: 100%; text-overflow: ellipsis; }  /* long file names shrink, never widen the page */
 .file-meta { margin-top: 12px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: flex-start; }
 .file-meta h2 { font-size: 20px; }
 .counts { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
